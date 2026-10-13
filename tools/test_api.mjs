@@ -75,3 +75,11 @@ r = await post('UP', { gameId: 'nope', winner: 'DEN' }); assert.equal(r.code, 40
 const noAuth = { code: 0, status(c) { this.code = c; return this; }, json() { return this; } };
 await pick({ method: 'POST', headers: {}, body: {}, query: {} }, noAuth); assert.equal(noAuth.code, 401);
 console.log('api tests passed: feeds, sessions, pins, pick rules');
+
+/* ---- the 5 AM Mountain batch guard (covers MST and MDT) ---- */
+const { isBatchHour } = await import('../lib/league.js');
+assert.equal(isBatchHour(new Date('2026-12-01T12:30:00Z')), true,  '12:30 UTC is 5:30 AM MST');
+assert.equal(isBatchHour(new Date('2026-12-01T11:30:00Z')), false, '11:30 UTC is 4:30 AM MST');
+assert.equal(isBatchHour(new Date('2026-10-20T11:30:00Z')), true,  '11:30 UTC is 5:30 AM MDT');
+assert.equal(isBatchHour(new Date('2026-10-20T12:30:00Z')), false, '12:30 UTC is 6:30 AM MDT');
+console.log('batch-hour guard passed');

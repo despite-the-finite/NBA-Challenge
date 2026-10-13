@@ -1,9 +1,9 @@
-// GET /api/state            -> full league state for the signed-in player
+// GET /api/state            -> full league state for the signed-in player (no feed calls: scores come from the 5 AM batch)
 // GET /api/state?since=ISO  -> only games/picks changed since then (plus picks that just unlocked)
 // The other player's winner pick is hidden (winner:null, has_winner:true) until that game tips off.
 import { sql } from '../lib/db.js';
 import { requirePlayer } from '../lib/auth.js';
-import { rowToGame, loadRules, maybeRefreshScores } from '../lib/league.js';
+import { rowToGame, loadRules } from '../lib/league.js';
 import { vapidKeys } from '../lib/notify.js';
 
 export default async function handler(req, res) {
@@ -12,7 +12,6 @@ export default async function handler(req, res) {
     const since = req.query.since ? new Date(req.query.since) : null;
     if (since && isNaN(since)) return res.status(400).json({ error: 'bad since' });
     const now = new Date();
-    if (!since) await maybeRefreshScores();
     const [players, rules, games, picks] = await Promise.all([
       since ? [] : sql()`select code, name, color, tz, reminder_time, notify_pretip, notify_lines, notify_results from players order by code`,
       since ? null : loadRules(),

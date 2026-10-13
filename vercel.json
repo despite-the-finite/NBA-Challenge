@@ -2,7 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "crons": [
-    { "path": "/api/tick?job=schedule", "schedule": "0 9 * * *" }
+    { "path": "/api/tick?job=daily", "schedule": "0 12 * * *" },
+    { "path": "/api/tick?job=daily", "schedule": "0 11 * * *" }
   ],
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }, { "key": "Service-Worker-Allowed", "value": "/" }] },

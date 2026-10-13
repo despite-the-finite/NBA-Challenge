@@ -138,7 +138,7 @@ function renderSlate(games, standings) {
       const linesWaitingOnThem = theirs.filter(m => m.items.includes('line')).length;
       if (mine.length) notices += notice('todo', '✍️', `<strong>${mine.length} game${mine.length > 1 ? 's' : ''} still need${mine.length > 1 ? '' : 's'} your input.</strong> ${linesWaitingOnMe ? `${esc(name(otherPlayer(store.me)))} is waiting on ${linesWaitingOnMe} line${linesWaitingOnMe > 1 ? 's' : ''} from you. ` : ''}${callsWaitingOnMe ? `${callsWaitingOnMe} line${callsWaitingOnMe > 1 ? 's' : ''} to call. ` : ''}`);
       else if (open.length) notices += notice('good', '✅', `<strong>You're all set for this day.</strong> ${linesWaitingOnThem ? `Waiting on ${esc(name(otherPlayer(store.me)))} for ${linesWaitingOnThem} line${linesWaitingOnThem > 1 ? 's' : ''}.` : ''}`);
-      if (!open.length && !anyFinal) notices += notice('info', '🔒', 'All games this day are locked. Scores update automatically after the final buzzer.');
+      if (!open.length && !anyFinal) notices += notice('info', '🔒', 'All games this day are locked. Scores and points arrive with the 5 AM Mountain refresh.');
     }
     if (day.UP.bonus || day.KP.bonus) { const w = day.UP.bonus ? 'UP' : 'KP'; notices += notice('good', '🎁', `<strong>Show-up bonus:</strong> ${esc(name(otherPlayer(w)))} made no picks this day, so ${esc(name(w))} gets +${store.rules.showUpBonus}.`); }
   }
@@ -174,7 +174,7 @@ function renderCard(g, now, readOnly = false) {
   const score = scoreGame(g, picks, store.rules);
   const winner = gameWinner(g), margin = gameMargin(g);
   const oppHasWinner = store.oppHasWinner(g.id, opp);
-  const statusPill = final ? `<span class="pill">Final</span>` : g.status === 'postponed' ? `<span class="pill">Postponed</span>` : g.status === 'live' ? `<span class="pill live">Live${g.clock ? ' · ' + esc(g.clock) : ''}</span>` : locked ? `<span class="pill">Locked</span>` : !isPickable(g, store.rules, now) ? `<span class="pill">Opens later</span>` : (new Date(g.tipoff) - now < 2 * 3600e3 ? `<span class="pill soon" title="Picks lock at tip-off">Locks in ${esc(countdown(g.tipoff))}</span>` : `<span class="pill open" title="Picks lock at tip-off">Open · ${esc(countdown(g.tipoff))}</span>`);
+  const statusPill = final ? `<span class="pill">Final</span>` : g.status === 'postponed' ? `<span class="pill">Postponed</span>` : g.status === 'live' ? `<span class="pill live">Live${g.clock ? ' · ' + esc(g.clock) : ''}</span>` : locked ? `<span class="pill" title="Scores are pulled once a day at 5 AM Mountain">Locked · scores at 5 AM MT</span>` : !isPickable(g, store.rules, now) ? `<span class="pill">Opens later</span>` : (new Date(g.tipoff) - now < 2 * 3600e3 ? `<span class="pill soon" title="Picks lock at tip-off">Locks in ${esc(countdown(g.tipoff))}</span>` : `<span class="pill open" title="Picks lock at tip-off">Open · ${esc(countdown(g.tipoff))}</span>`);
 
   const team = (code, scoreVal) => {
     const t = TEAMS[code];
@@ -356,7 +356,7 @@ function renderHistory(st) {
     const cls = d.dayWinner === 'UP' ? 'win-up' : d.dayWinner === 'KP' ? 'win-kp' : 'tie';
     const open = ui.expanded === d.date;
     return `<button class="dayrow ${cls}" data-expand="${d.date}" aria-expanded="${open}">
-      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} games${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · in progress'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
+      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} games${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · scores arrive at 5 AM MT'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
       <span class="s num"><span class="u">${d.UP.total}</span><span class="d2">–</span><span class="k">${d.KP.total}</span></span>
     </button>${open ? `<div class="games" style="margin:4px 0 10px">${d.games.map(x => renderCard(x.game, store.now(), true)).join('')}</div>` : ''}`;
   }).join('')}</div></section>`;
@@ -380,7 +380,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Daily reminder time</b><span>Only sent on days you still have open picks. Your time zone: ${esc(tz)}</span></div><input type="time" id="pref-time" value="${esc(prefs.reminder_time || '11:00')}" ${store.mode === 'demo' ? 'disabled' : ''}></div>
       <div class="switch"><div class="lbl"><b>Second nudge before first tip</b><span>60 minutes before the first game if picks are still missing.</span></div><button class="sw ${prefs.notify_pretip !== false ? 'on' : ''}" data-pref="notify_pretip" aria-pressed="${prefs.notify_pretip !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
       <div class="switch"><div class="lbl"><b>Alert me when a line is posted</b><span>So you can call Over or Under right away.</span></div><button class="sw ${prefs.notify_lines !== false ? 'on' : ''}" data-pref="notify_lines" aria-pressed="${prefs.notify_lines !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
-      <div class="switch"><div class="lbl"><b>Nightly result</b><span>Who took the day, once every game is final.</span></div><button class="sw ${prefs.notify_results !== false ? 'on' : ''}" data-pref="notify_results" aria-pressed="${prefs.notify_results !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
+      <div class="switch"><div class="lbl"><b>Yesterday's result</b><span>Included in the morning reminder, once the 5 AM batch has scored it.</span></div><button class="sw ${prefs.notify_results !== false ? 'on' : ''}" data-pref="notify_results" aria-pressed="${prefs.notify_results !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
       ${store.mode === 'live' ? `<div class="row"><button class="btn small" data-act="saveprefs">Save reminder settings</button><button class="btn small ghost" data-act="testpush">Send a test notification</button></div>` : ''}
     </div>
     <div class="section"><h3>House rules</h3>
@@ -399,7 +399,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Advance the demo clock one day</b><span>Past games get simulated finals and random picks for both players.</span></div><button class="btn small" data-act="advance">Advance ⏩</button></div>
       <div class="switch"><div class="lbl"><b>Reset the demo</b><span>Clears all demo picks and results from this browser.</span></div><button class="btn small danger" data-act="reset">Reset</button></div>
     </div>` : ''}
-    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet (run the schedule job)'}</dd>` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
+    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet (run the daily job with force=1)'}</dd>` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
   </section>`;
 }
 

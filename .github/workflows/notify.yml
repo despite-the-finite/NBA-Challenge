@@ -1,0 +1,32 @@
+# Database-only notification tick every 15 minutes: morning reminders at each player's chosen time,
+# the pre-tip nudge, and unanswered-line alerts. It never calls the NBA/ESPN feeds; those are hit only
+# by the 5 AM Mountain batch (Vercel cron -> /api/tick?job=daily).
+# Setup: repo Settings -> Secrets and variables -> Actions -> add
+#   secret   CRON_SECRET  (same value as the Vercel env var)
+#   variable APP_URL      e.g. https://nba-challenge.vercel.app
+name: Notification tick
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'notify, daily, schedule or scores'
+        default: 'notify'
+      force:
+        description: 'set to 1 to run the daily batch outside 5 AM Mountain'
+        default: '0'
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call /api/tick
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB: ${{ github.event.inputs.job || 'notify' }}
+          FORCE: ${{ github.event.inputs.force || '0' }}
+        run: |
+          test -n "$APP_URL" || { echo "Set the APP_URL repository variable"; exit 1; }
+          curl -sS --fail-with-body -m 120 "$APP_URL/api/tick?job=$JOB&force=$FORCE" -H "Authorization: Bearer $CRON_SECRET"
