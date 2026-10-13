@@ -4,10 +4,11 @@
 import { sql } from '../lib/db.js';
 import { requirePlayer } from '../lib/auth.js';
 import { rowToGame, loadRules, maybeRefreshScores } from '../lib/league.js';
+import { vapidKeys } from '../lib/notify.js';
 
 export default async function handler(req, res) {
   try {
-    const me = requirePlayer(req, res); if (!me) return;
+    const me = await requirePlayer(req, res); if (!me) return;
     const since = req.query.since ? new Date(req.query.since) : null;
     if (since && isNaN(since)) return res.status(400).json({ error: 'bad since' });
     const now = new Date();
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     if (!since) {
       out.players = players.map(p => ({ code: p.code, name: p.name, color: p.color, ...(p.code === me ? { tz: p.tz, reminder_time: p.reminder_time, notify_pretip: p.notify_pretip, notify_lines: p.notify_lines, notify_results: p.notify_results } : {}) }));
       out.rules = rules;
-      out.vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+      out.vapidPublicKey = (await vapidKeys()).publicKey;
       const [s] = await sql()`select season, last_schedule_sync, last_scores_sync from settings where id = 1`;
       out.season = s?.season; out.lastScheduleSync = s?.last_schedule_sync; out.lastScoresSync = s?.last_scores_sync;
     }

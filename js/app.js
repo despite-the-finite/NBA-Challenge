@@ -409,16 +409,27 @@ function renderAuth() {
   return `<div class="app"><main><div class="auth"><div class="brand"><h2>NBA Challenge</h2><span class="season">${esc(CFG.SEASON)} · ${esc(name('UP'))} vs ${esc(name('KP'))}</span></div>
     <form id="auth-form" class="section">
       <div class="field"><label>Who are you?</label><div class="tiles" role="radiogroup">${PLAYER_CODES.map(p => `<button type="button" class="tile ${p.toLowerCase()}" data-auth-player="${p}" role="radio" aria-checked="${ui.authPlayer === p}" style="align-items:center;${ui.authPlayer === p ? `outline:2px solid var(--${p.toLowerCase()});` : 'opacity:.6;'}"><span class="big num" style="font-size:40px">${esc(name(p))}</span></button>`).join('')}</div></div>
-      <div class="field"><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="8" required placeholder="••••••"></div>
-      <button class="btn primary" type="submit">Sign in</button><div id="auth-err" style="font-size:13px;color:var(--bad)"></div></form>
+      ${store.needsPin?.has(ui.authPlayer)
+        ? `<div class="notice info"><span class="ico">👋</span><div><strong>First time here.</strong> Create a PIN for ${esc(name(ui.authPlayer))} (4 to 8 digits). You'll use it to sign in on every device.</div></div>
+           <div class="field"><label for="pin">New PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" autocomplete="new-password" maxlength="8" required placeholder="••••••"></div>
+           <div class="field"><label for="pin2">Repeat PIN</label><input id="pin2" type="password" inputmode="numeric" pattern="[0-9]{4,8}" autocomplete="new-password" maxlength="8" required placeholder="••••••"></div>
+           <button class="btn primary" type="submit">Create PIN and sign in</button>`
+        : `<div class="field"><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="8" required placeholder="••••••"></div>
+           <button class="btn primary" type="submit">Sign in</button>`}
+      <div id="auth-err" style="font-size:13px;color:var(--bad)"></div></form>
     <div class="faint" style="font-size:12px;text-align:center">Two players, two PINs. You can change yours in Settings.</div></div></main></div>`;
 }
 function bindAuth() {
   $$('[data-auth-player]').forEach(b => b.onclick = () => { ui.authPlayer = b.dataset.authPlayer; render(); $('#pin')?.focus(); });
   $('#auth-form').onsubmit = async (e) => {
     e.preventDefault(); $('#auth-err').textContent = '';
-    try { await store.signIn(ui.authPlayer, $('#pin').value.trim()); try { localStorage.setItem('nbac.lastPlayer', ui.authPlayer); } catch {} }
-    catch (err) { $('#auth-err').textContent = err.message; }
+    try {
+      if (store.needsPin?.has(ui.authPlayer)) {
+        if ($('#pin').value !== $('#pin2').value) throw new Error('The two PINs do not match.');
+        await store.setupPin(ui.authPlayer, $('#pin').value.trim());
+      } else await store.signIn(ui.authPlayer, $('#pin').value.trim());
+      try { localStorage.setItem('nbac.lastPlayer', ui.authPlayer); } catch {}
+    } catch (err) { $('#auth-err').textContent = err.message; }
   };
 }
 function pinBox() {

@@ -6,7 +6,7 @@ create table if not exists players (
   code            text primary key check (code in ('UP','KP')),
   name            text not null,
   color           text,
-  pin_hash        text,                       -- scrypt hash of the sign-in PIN
+  pin_hash        text,                       -- scrypt hash of the sign-in PIN (null until the player creates one)
   pin_salt        text,
   failed_pins     int  not null default 0,
   locked_until    timestamptz,
@@ -23,8 +23,12 @@ create table if not exists settings (
   rules               jsonb not null default '{}'::jsonb,
   season              text not null default '2026-27',
   last_scores_sync    timestamptz,
-  last_schedule_sync  timestamptz
+  last_schedule_sync  timestamptz,
+  session_secret      text,     -- generated on first use (signs login cookies)
+  vapid_public        text,     -- generated on first use (web push keys)
+  vapid_private       text
 );
+alter table settings add column if not exists session_secret text, add column if not exists vapid_public text, add column if not exists vapid_private text;
 insert into settings (id) values (1) on conflict do nothing;
 
 -- One row per regular-season game. id is a natural key, 'g:YYYYMMDD-AWAY-HOME' (ET date), so

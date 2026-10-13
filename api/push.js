@@ -6,7 +6,7 @@ import { sendTo } from '../lib/notify.js';
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const me = requirePlayer(req, res); if (!me) return;
+    const me = await requirePlayer(req, res); if (!me) return;
     const body = req.body || {};
     if (body.action === 'subscribe') {
       const s = body.subscription || {};

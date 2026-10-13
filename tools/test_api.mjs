@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { parseNbaSchedule, parseEspnEvent, gameKey } from '../lib/feeds.js';
 
-process.env.SESSION_SECRET = 'test-secret';
+process.env.SESSION_SECRET = 'test-secret';   // env wins over the settings-table secret
 const { currentPlayer, setSession, hashPin } = await import('../lib/auth.js');
 const { _setSql } = await import('../lib/db.js');
 
@@ -25,10 +25,10 @@ assert.equal(gameKey('2026-12-25', 'DEN', 'MIN'), 'g:20261225-DEN-MIN');
 
 /* ---- sessions & pins ---- */
 const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; } };
-setSession(res, 'KP');
+await setSession(res, 'KP');
 const cookie = res.headers['Set-Cookie'].split(';')[0];
-assert.equal(currentPlayer({ headers: { cookie } }), 'KP');
-assert.equal(currentPlayer({ headers: { cookie: cookie.slice(0, -2) + 'xx' } }), null);
+assert.equal(await currentPlayer({ headers: { cookie } }), 'KP');
+assert.equal(await currentPlayer({ headers: { cookie: cookie.slice(0, -2) + 'xx' } }), null);
 const { salt, hash } = hashPin('123456'); assert.equal(hashPin('123456', salt).hash, hash); assert.notEqual(hashPin('123457', salt).hash, hash);
 
 /* ---- pick endpoint against a stub database ---- */
@@ -50,11 +50,13 @@ _setSql(async (strings, ...vals) => {
   if (q.startsWith('select name from players')) return db.players.filter(p => p.code === vals[0]);
   if (q.startsWith('insert into notifications_log')) { if (db.log.has(vals[0])) return []; db.log.add(vals[0]); return [{ key: vals[0] }]; }
   if (q.startsWith('select endpoint, p256dh, auth from push_subscriptions')) return [];
+  if (q.startsWith('select vapid_public, vapid_private from settings')) return [{ vapid_public: null, vapid_private: null }];
+  if (q.startsWith('update settings set vapid_public')) return [{ vapid_public: vals[0], vapid_private: vals[1] }];
   throw new Error('unexpected query in test: ' + q);
 });
 const pick = (await import('../api/pick.js')).default;
 async function post(player, body) {
-  const r = { headers: {}, setHeader(k, v) { this.headers[k] = v; } }; setSession(r, player);
+  const r = { headers: {}, setHeader(k, v) { this.headers[k] = v; } }; await setSession(r, player);
   const req = { method: 'POST', headers: { cookie: r.headers['Set-Cookie'].split(';')[0] }, body, query: {} };
   const out = { code: 0, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
   await pick(req, out); return out;

@@ -169,10 +169,12 @@ export class LiveStore extends BaseStore {
     const a = await this.call('/auth');
     for (const p of a.players || []) this.players[p.code] = { ...this.players[p.code], name: p.name, color: p.color || this.players[p.code].color };
     this.me = a.me;
+    this.needsPin = new Set(a.needsPin || []);
     if (this.me) await this.loadAll();
     this.startPolling();
   }
   async signIn(player, pin) { const r = await this.call('/auth', { method: 'POST', body: { action: 'login', player, pin } }); this.me = r.me; await this.loadAll(); this.emit(); }
+  async setupPin(player, pin) { const r = await this.call('/auth', { method: 'POST', body: { action: 'setupPin', player, pin } }); this.needsPin.delete(player); this.me = r.me; await this.loadAll(); this.emit(); }
   async signOut() { await this.call('/auth', { method: 'POST', body: { action: 'logout' } }); this.me = null; this.games.clear(); this.picks.clear(); this.emit(); }
   async changePin(currentPin, newPin) { await this.call('/auth', { method: 'POST', body: { action: 'changePin', currentPin, newPin } }); }
   async loadAll() {

@@ -9,7 +9,7 @@ import { otherPlayer, isPickable, isValidLine } from '../js/scoring.js';
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-    const me = requirePlayer(req, res); if (!me) return;
+    const me = await requirePlayer(req, res); if (!me) return;
     const body = req.body || {};
     const gameId = String(body.gameId || '');
     const [row] = await sql()`select * from games where id = ${gameId}`;
