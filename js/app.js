@@ -1,10 +1,10 @@
 // NBA Challenge web app. Renders four views (Slate, Standings, History, Settings) from the store.
-import { createStore } from './store.js';
+import { createStore, DemoStore } from './store.js';
 import { TEAMS, teamLogo, teamName } from './teams.js';
 import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick } from './scoring.js';
 
 const CFG = window.NBA_CONFIG;
-const store = createStore(CFG);
+let store = createStore(CFG);
 const ui = { view: 'slate', date: null, expanded: null, season: 'current', lastSeason: null, pendingLine: {}, lineTimer: {} };
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -37,7 +37,14 @@ const initial = (code) => code[0];
 async function boot() {
   applyTheme(localStorage.getItem('nbac.theme') || 'system');
   try { await store.init(); }
-  catch (e) { $('#app').innerHTML = `<div class="empty"><div class="big">⚠️</div><b>Could not start</b><div>${esc(e.message)}</div></div>`; return; }
+  catch (e) {
+    if (store.mode === 'live') {
+      // No API behind this page (opened from a plain static host): run the demo instead.
+      console.warn('API unavailable, running demo:', e.message);
+      store = new DemoStore(CFG, e.message);
+      try { await store.init(); } catch (e2) { $('#app').innerHTML = `<div class="empty"><div class="big">⚠️</div><b>Could not start</b><div>${esc(e2.message)}</div></div>`; return; }
+    } else { $('#app').innerHTML = `<div class="empty"><div class="big">⚠️</div><b>Could not start</b><div>${esc(e.message)}</div></div>`; return; }
+  }
   store.onChange(render);
   window.addEventListener('hashchange', () => { const v = location.hash.replace('#', ''); if (['slate', 'standings', 'history', 'settings'].includes(v)) { ui.view = v; render(); } });
   const v = location.hash.replace('#', ''); if (['slate', 'standings', 'history', 'settings'].includes(v)) ui.view = v;
@@ -49,8 +56,7 @@ async function boot() {
 /* ---------------- render ---------------- */
 function render() {
   const app = $('#app');
-  if (store.mode === 'live' && !store.user) { app.innerHTML = renderAuth(); bindAuth(); return; }
-  if (store.mode === 'live' && !store.me) { app.innerHTML = `<div class="empty"><div class="big">🔗</div><b>Signed in, but not linked to a player</b><div class="muted">Run the "link players" SQL in supabase/schema.sql for ${esc(store.user.email)}.</div><button class="btn" data-act="signout">Sign out</button></div>`; bindGlobal(); return; }
+  if (store.mode === 'live' && !store.me) { app.innerHTML = renderAuth(); bindAuth(); return; }
   const games = store.gameList();
   const standings = computeStandings(games, store.picks, store.rules);
   document.documentElement.style.setProperty('--me-color', `var(--${store.me.toLowerCase()})`);
@@ -167,8 +173,8 @@ function renderCard(g, now, readOnly = false) {
   const mine = picks[me] || {}, theirs = picks[opp] || {};
   const score = scoreGame(g, picks, store.rules);
   const winner = gameWinner(g), margin = gameMargin(g);
-  const oppHasWinner = store.mode === 'live' ? store.oppHasWinner(g.id, opp) : !!theirs.winner;
-  const statusPill = final ? `<span class="pill">Final</span>` : g.status === 'live' ? `<span class="pill live">Live${g.clock ? ' · ' + esc(g.clock) : ''}</span>` : locked ? `<span class="pill">Locked</span>` : !isPickable(g, store.rules, now) ? `<span class="pill">Opens later</span>` : (new Date(g.tipoff) - now < 2 * 3600e3 ? `<span class="pill soon" title="Picks lock at tip-off">Locks in ${esc(countdown(g.tipoff))}</span>` : `<span class="pill open" title="Picks lock at tip-off">Open · ${esc(countdown(g.tipoff))}</span>`);
+  const oppHasWinner = store.oppHasWinner(g.id, opp);
+  const statusPill = final ? `<span class="pill">Final</span>` : g.status === 'postponed' ? `<span class="pill">Postponed</span>` : g.status === 'live' ? `<span class="pill live">Live${g.clock ? ' · ' + esc(g.clock) : ''}</span>` : locked ? `<span class="pill">Locked</span>` : !isPickable(g, store.rules, now) ? `<span class="pill">Opens later</span>` : (new Date(g.tipoff) - now < 2 * 3600e3 ? `<span class="pill soon" title="Picks lock at tip-off">Locks in ${esc(countdown(g.tipoff))}</span>` : `<span class="pill open" title="Picks lock at tip-off">Open · ${esc(countdown(g.tipoff))}</span>`);
 
   const team = (code, scoreVal) => {
     const t = TEAMS[code];
@@ -365,12 +371,12 @@ function renderSettings() {
   const opt = (v, cur, label) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${label}</option>`;
   return `<section class="view" id="view-settings">
     <div class="section"><h3>Players</h3>
-      ${store.mode === 'demo' ? `<div class="switch"><div class="lbl"><b>I am</b><span>Demo only: switch sides to make the other player's picks.</span></div><div class="seg"><button data-act="switchto" data-p="UP" class="${store.me === 'UP' ? 'on' : ''}" style="--me-color:var(--up)">${esc(name('UP'))}</button><button data-act="switchto" data-p="KP" class="${store.me === 'KP' ? 'on' : ''}" style="--me-color:var(--kp)">${esc(name('KP'))}</button></div></div>` : `<div class="switch"><div class="lbl"><b>Signed in as</b><span>${esc(store.user.email)} · playing as ${esc(name(store.me))}</span></div><button class="btn small" data-act="signout">Sign out</button></div>`}
+      ${store.mode === 'demo' ? `<div class="switch"><div class="lbl"><b>I am</b><span>Demo only: switch sides to make the other player's picks.</span></div><div class="seg"><button data-act="switchto" data-p="UP" class="${store.me === 'UP' ? 'on' : ''}" style="--me-color:var(--up)">${esc(name('UP'))}</button><button data-act="switchto" data-p="KP" class="${store.me === 'KP' ? 'on' : ''}" style="--me-color:var(--kp)">${esc(name('KP'))}</button></div></div>` : `<div class="switch"><div class="lbl"><b>Playing as ${esc(name(store.me))}</b><span>Signed in on this device.</span></div><div class="row"><button class="btn small" data-act="changepin">Change PIN</button><button class="btn small ghost" data-act="signout">Sign out</button></div></div>`}
       <div class="row"><div class="field grow"><label for="name-up">${PLAYER_CODES[0]} display name</label><input id="name-up" value="${esc(name('UP'))}" maxlength="16"></div><div class="field grow"><label for="name-kp">${PLAYER_CODES[1]} display name</label><input id="name-kp" value="${esc(name('KP'))}" maxlength="16"></div></div>
       <div><button class="btn small" data-act="savenames">Save names</button></div>
     </div>
     <div class="section"><h3>Notifications</h3>
-      <div class="switch"><div class="lbl"><b>Push notifications on this device</b><span>${store.mode === 'live' ? 'Daily pick reminder, "line posted" alerts and the day\'s result. On iPhone, add the app to your Home Screen first.' : 'Available once the app is connected to Supabase (see README).'}</span></div><button class="sw" id="push-sw" data-act="togglepush" aria-pressed="false" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
+      <div class="switch"><div class="lbl"><b>Push notifications on this device</b><span>${store.mode === 'live' ? 'Daily pick reminder, "line posted" alerts and the day\'s result. On iPhone, add the app to your Home Screen first.' : 'Available in live mode (deployed on Vercel with the API).'}</span></div><button class="sw" id="push-sw" data-act="togglepush" aria-pressed="false" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
       <div class="switch"><div class="lbl"><b>Daily reminder time</b><span>Only sent on days you still have open picks. Your time zone: ${esc(tz)}</span></div><input type="time" id="pref-time" value="${esc(prefs.reminder_time || '11:00')}" ${store.mode === 'demo' ? 'disabled' : ''}></div>
       <div class="switch"><div class="lbl"><b>Second nudge before first tip</b><span>60 minutes before the first game if picks are still missing.</span></div><button class="sw ${prefs.notify_pretip !== false ? 'on' : ''}" data-pref="notify_pretip" aria-pressed="${prefs.notify_pretip !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
       <div class="switch"><div class="lbl"><b>Alert me when a line is posted</b><span>So you can call Over or Under right away.</span></div><button class="sw ${prefs.notify_lines !== false ? 'on' : ''}" data-pref="notify_lines" aria-pressed="${prefs.notify_lines !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
@@ -393,18 +399,38 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Advance the demo clock one day</b><span>Past games get simulated finals and random picks for both players.</span></div><button class="btn small" data-act="advance">Advance ⏩</button></div>
       <div class="switch"><div class="lbl"><b>Reset the demo</b><span>Clears all demo picks and results from this browser.</span></div><button class="btn small danger" data-act="reset">Reset</button></div>
     </div>` : ''}
-    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? 'Demo (this browser only)' : 'Live (Supabase)'}</dd><dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
+    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet (run the schedule job)'}</dd>` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
   </section>`;
 }
 
 /* ---------------- Auth ---------------- */
 function renderAuth() {
-  return `<div class="app"><main><div class="auth"><div class="brand"><h2>NBA Challenge</h2><span class="season">${esc(CFG.SEASON)}</span></div>
-    <form id="auth-form" class="section"><div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required></div><div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required></div><button class="btn primary" type="submit">Sign in</button><div class="muted" id="auth-err" style="font-size:13px"></div></form>
-    <div class="faint" style="font-size:12px;text-align:center">Accounts are created by the league commissioner in Supabase. No sign-ups.</div></div></main></div>`;
+  ui.authPlayer = ui.authPlayer || (localStorage.getItem('nbac.lastPlayer') || 'UP');
+  return `<div class="app"><main><div class="auth"><div class="brand"><h2>NBA Challenge</h2><span class="season">${esc(CFG.SEASON)} · ${esc(name('UP'))} vs ${esc(name('KP'))}</span></div>
+    <form id="auth-form" class="section">
+      <div class="field"><label>Who are you?</label><div class="tiles" role="radiogroup">${PLAYER_CODES.map(p => `<button type="button" class="tile ${p.toLowerCase()}" data-auth-player="${p}" role="radio" aria-checked="${ui.authPlayer === p}" style="align-items:center;${ui.authPlayer === p ? `outline:2px solid var(--${p.toLowerCase()});` : 'opacity:.6;'}"><span class="big num" style="font-size:40px">${esc(name(p))}</span></button>`).join('')}</div></div>
+      <div class="field"><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" maxlength="8" required placeholder="••••••"></div>
+      <button class="btn primary" type="submit">Sign in</button><div id="auth-err" style="font-size:13px;color:var(--bad)"></div></form>
+    <div class="faint" style="font-size:12px;text-align:center">Two players, two PINs. You can change yours in Settings.</div></div></main></div>`;
 }
 function bindAuth() {
-  $('#auth-form').onsubmit = async (e) => { e.preventDefault(); $('#auth-err').textContent = ''; try { await store.signIn($('#email').value.trim(), $('#pw').value); } catch (err) { $('#auth-err').textContent = err.message; } };
+  $$('[data-auth-player]').forEach(b => b.onclick = () => { ui.authPlayer = b.dataset.authPlayer; render(); $('#pin')?.focus(); });
+  $('#auth-form').onsubmit = async (e) => {
+    e.preventDefault(); $('#auth-err').textContent = '';
+    try { await store.signIn(ui.authPlayer, $('#pin').value.trim()); try { localStorage.setItem('nbac.lastPlayer', ui.authPlayer); } catch {} }
+    catch (err) { $('#auth-err').textContent = err.message; }
+  };
+}
+function pinBox() {
+  const bg = document.createElement('div'); bg.className = 'modal-bg';
+  bg.innerHTML = `<form class="modal" role="dialog" aria-modal="true"><h3>Change PIN</h3>
+    <div class="field"><label for="pin-cur">Current PIN</label><input id="pin-cur" type="password" inputmode="numeric" maxlength="8" required></div>
+    <div class="field"><label for="pin-new">New PIN (4 to 8 digits)</label><input id="pin-new" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required></div>
+    <div id="pin-err" style="font-size:13px;color:var(--bad)"></div>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-no>Cancel</button><button type="submit" class="btn primary">Save PIN</button></div></form>`;
+  bg.onclick = (e) => { if (e.target === bg || e.target.dataset.no != null) bg.remove(); };
+  bg.querySelector('form').onsubmit = async (e) => { e.preventDefault(); try { await store.changePin($('#pin-cur', bg).value, $('#pin-new', bg).value); bg.remove(); toast('PIN changed'); } catch (err) { $('#pin-err', bg).textContent = err.message; } };
+  document.body.appendChild(bg);
 }
 
 /* ---------------- events ---------------- */
@@ -444,8 +470,9 @@ function bindSlate() {
 function lastLine() { try { const v = Number(localStorage.getItem('nbac.lastLine')); if (v) return v; } catch {} return 8; }
 function bindSettings() {
   $$('[data-act="switchto"]').forEach(b => b.onclick = () => store.switchPlayer(b.dataset.p));
+  $$('[data-act="changepin"]').forEach(b => b.onclick = () => pinBox());
   $$('[data-act="reset"]').forEach(b => b.onclick = () => confirmBox('Reset the demo?', 'All demo picks and simulated results in this browser will be cleared.', () => store.resetDemo()));
-  $$('[data-act="savenames"]').forEach(b => b.onclick = () => guard(async () => { await store.setPlayerName('UP', $('#name-up').value.trim() || 'UP'); await store.setPlayerName('KP', $('#name-kp').value.trim() || 'KP'); toast('Names saved'); }));
+  $$('[data-act="savenames"]').forEach(b => b.onclick = () => guard(async () => { await store.setPlayerNames({ UP: $('#name-up').value.trim() || 'UP', KP: $('#name-kp').value.trim() || 'KP' }); toast('Names saved'); }));
   $$('[data-theme]').forEach(b => b.onclick = () => { applyTheme(b.dataset.theme); render(); });
   $$('[data-rule]').forEach(s => s.onchange = () => guard(() => store.setRules({ [s.dataset.rule]: s.value })));
   $$('[data-rule-toggle]').forEach(b => b.onclick = () => guard(() => store.setRules({ [b.dataset.ruleToggle]: !store.rules[b.dataset.ruleToggle] })));

@@ -1,0 +1,17 @@
+{
+  "name": "nba-challenge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "UP vs KP: season-long NBA pick'em with margin duels. Static PWA + Vercel API + Neon Postgres.",
+  "scripts": {
+    "test": "node tools/test_scoring.mjs && node tools/test_api.mjs",
+    "dev": "vercel dev",
+    "import-schedule": "node tools/import_schedule.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "1.2.0",
+    "web-push": "3.6.7"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,5 +1,0 @@
-# Supabase CLI config. The `tick` function is called by pg_cron with a shared secret
-# (x-cron-secret header) and by the app for test pushes with the user's JWT, so it checks
-# auth itself instead of relying on the gateway's JWT check.
-[functions.tick]
-verify_jwt = false
