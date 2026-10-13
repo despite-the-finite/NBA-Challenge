@@ -367,7 +367,6 @@ function renderSettings() {
   const r = store.rules;
   const theme = localStorage.getItem('nbac.theme') || 'system';
   const prefs = store.mode === 'live' ? store.myPrefs() : {};
-  const tz = prefs.tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const opt = (v, cur, label) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${label}</option>`;
   return `<section class="view" id="view-settings">
     <div class="section"><h3>Players</h3>
@@ -377,11 +376,9 @@ function renderSettings() {
     </div>
     <div class="section"><h3>Notifications</h3>
       <div class="switch"><div class="lbl"><b>Push notifications on this device</b><span>${store.mode === 'live' ? 'Daily pick reminder, "line posted" alerts and the day\'s result. On iPhone, add the app to your Home Screen first.' : 'Available in live mode (deployed on Vercel with the API).'}</span></div><button class="sw" id="push-sw" data-act="togglepush" aria-pressed="false" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
-      <div class="switch"><div class="lbl"><b>Daily reminder time</b><span>Only sent on days you still have open picks. Your time zone: ${esc(tz)}</span></div><input type="time" id="pref-time" value="${esc(prefs.reminder_time || '11:00')}" ${store.mode === 'demo' ? 'disabled' : ''}></div>
-      <div class="switch"><div class="lbl"><b>Second nudge before first tip</b><span>60 minutes before the first game if picks are still missing.</span></div><button class="sw ${prefs.notify_pretip !== false ? 'on' : ''}" data-pref="notify_pretip" aria-pressed="${prefs.notify_pretip !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
-      <div class="switch"><div class="lbl"><b>Alert me when a line is posted</b><span>So you can call Over or Under right away.</span></div><button class="sw ${prefs.notify_lines !== false ? 'on' : ''}" data-pref="notify_lines" aria-pressed="${prefs.notify_lines !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
-      <div class="switch"><div class="lbl"><b>Yesterday's result</b><span>Included in the morning reminder, once the 5 AM batch has scored it.</span></div><button class="sw ${prefs.notify_results !== false ? 'on' : ''}" data-pref="notify_results" aria-pressed="${prefs.notify_results !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
-      ${store.mode === 'live' ? `<div class="row"><button class="btn small" data-act="saveprefs">Save reminder settings</button><button class="btn small ghost" data-act="testpush">Send a test notification</button></div>` : ''}
+      <div class="switch"><div class="lbl"><b>Morning message</b><span>Around 9 AM Mountain (11 AM Eastern): last night's result plus tonight's games and what you still owe.</span></div><button class="sw ${prefs.notify_results !== false ? 'on' : ''}" data-pref="notify_results" aria-pressed="${prefs.notify_results !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
+      <div class="switch"><div class="lbl"><b>Line posted</b><span>The moment your brother posts a line, so you can call Over or Under.</span></div><button class="sw ${prefs.notify_lines !== false ? 'on' : ''}" data-pref="notify_lines" aria-pressed="${prefs.notify_lines !== false}" ${store.mode === 'demo' ? 'disabled' : ''}></button></div>
+      ${store.mode === 'live' ? `<div class="row"><button class="btn small" data-act="saveprefs">Save notification settings</button><button class="btn small ghost" data-act="testpush">Send a test notification</button></div>` : ''}
     </div>
     <div class="section"><h3>House rules</h3>
       <div class="switch"><div class="lbl"><b>Push on the line</b><span>Margin lands exactly on the line.</span></div><select data-rule="push">${opt('nobody', r.push, 'Nobody scores')}${opt('selector', r.push, 'Selector scores (a push is a miss)')}</select></div>
@@ -493,7 +490,7 @@ function bindSettings() {
     $$('[data-act="togglepush"]').forEach(b => b.onclick = () => guard(async () => { if (b.classList.contains('on')) { await store.disablePush(); toast('Notifications off'); } else { await store.enablePush(); toast('Notifications on for this device'); } render(); }));
     $$('[data-pref]').forEach(b => b.onclick = () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
     $$('[data-act="saveprefs"]').forEach(b => b.onclick = () => guard(async () => {
-      const prefs = { reminder_time: $('#pref-time').value || '11:00', tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+      const prefs = { tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
       $$('[data-pref]').forEach(x => prefs[x.dataset.pref] = x.classList.contains('on'));
       await store.savePrefs(prefs); toast('Reminder settings saved');
     }));

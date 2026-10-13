@@ -68,16 +68,15 @@ Already done: the Neon project **NBA Challenge** (`quiet-flower-84539406`, datab
    It pulls the official NBA.com schedule (ESPN as fallback) and assigns selectors.
    No internet on the server? Download `https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json` in a browser and run `DATABASE_URL=... node tools/import_schedule.mjs scheduleLeagueV2_1.json --db`.
 
-3. **The 5 AM Mountain batch** runs by itself: `vercel.json` schedules `/api/tick?job=daily` at 11:00 and 12:00 UTC (Vercel cron has no time zones; one of the two is 5 AM Mountain depending on daylight saving, and the job skips the other). It refreshes the schedule, scores every game that has tipped off (normally one feed request, for yesterday), marks postponed games, and queues the morning messages. Nothing touches the NBA feeds at any other time, and opening the app never triggers a fetch.
+3. **The 5 AM Mountain batch** runs by itself: `vercel.json` schedules `/api/tick?job=daily` at 12:00 UTC, which is 5 AM Mountain (6 AM during daylight saving, i.e. the first two weeks and the last month of the season). It refreshes the schedule, scores every game that has tipped off (normally one feed request, for yesterday) and marks postponed games. Nothing touches the NBA feeds at any other time, and opening the app never triggers a fetch.
 
-   **Reminders** need a clock, so the repo's GitHub Actions workflow (`.github/workflows/notify.yml`) calls `/api/tick?job=notify` every 15 minutes. That endpoint only reads the database and sends push messages; it never calls the feeds. In the GitHub repo: *Settings → Secrets and variables → Actions*: add secret `CRON_SECRET` (same value as on Vercel) and variable `APP_URL` (`https://<your-app>.vercel.app`). If you'd rather have no workflow at all, the daily batch still sends the morning message, just at 5 AM instead of your chosen time.
+   **The morning message** is the second cron, `/api/tick?job=morning` at 16:00 UTC (9 AM Mountain, 11 AM Eastern). It reads the database and sends one push to each of you; it never calls the feeds. Vercel's free plan allows exactly these two daily crons, so there is no other scheduler, no GitHub workflow, nothing else to configure.
 
 4. **On each phone**: open the app URL, pick your name, create (then later enter) your PIN, add it to the Home Screen (iPhone: Share → *Add to Home Screen*; Android: *Install app*), open it from the Home Screen, then Settings → turn on push notifications. iPhone only delivers web push to Home Screen apps. Change your PIN in Settings.
 
 ## Notifications you will get
 
-* **Morning message** at your chosen local time: yesterday's result (scored in the 5 AM batch) plus tonight's games and how many picks you still owe.
-* **Pre-tip nudge** about an hour before the first game if picks are still missing.
+* **Morning message** around 9 AM Mountain / 11 AM Eastern: last night's result (scored in the 5 AM batch) plus tonight's games, how many picks you still owe, and any lines waiting for your call.
 * **Line posted**: the moment your brother posts a line you haven't answered.
 
 ## Project layout
@@ -93,7 +92,7 @@ api/auth.js                             sign in with player + PIN (signed cookie
 api/state.js                            league state, delta polling, hides opponent picks until tip-off
 api/pick.js                             save a winner / line / call with every rule enforced
 api/settings.js, api/push.js            rules, names, reminder prefs, push subscriptions
-api/tick.js                             cron entry: the 5 AM daily batch, notification tick
+api/tick.js                             cron entry: the 5 AM batch and the morning message
 lib/feeds.js                            NBA.com and ESPN feed parsers (one normalized shape)
 lib/league.js                           sync + notification logic;  lib/notify.js web push;  lib/auth.js sessions
 db/schema.sql                           Neon schema
@@ -102,7 +101,6 @@ data/sample-schedule.json               demo slate (data/schedule-2026-27.json r
 tools/prep_data.py                      rebuilds the data files from the spreadsheet
 tools/import_schedule.mjs               imports a downloaded NBA.com schedule file
 tools/test_scoring.mjs, tools/test_api.mjs   npm test
-.github/workflows/notify.yml            15-minute notification tick (database only)
 ```
 
 ## Roadmap

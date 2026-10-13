@@ -1,9 +1,9 @@
-// GET /api/tick?job=daily|notify|schedule|scores   (Authorization: Bearer <CRON_SECRET>)
-//   daily    the one batch per day: schedule refresh + yesterday's scores + due notifications.
-//            Guarded to 5 AM Mountain (add &force=1 to run it now, e.g. the first time).
-//   notify   database-only: morning reminders, pre-tip nudges, unanswered lines. No NBA feed calls.
-//   schedule / scores   the two halves of the batch, for manual use.
-import { dailyJob, syncSchedule, syncScores, notifyAll, batchClock } from '../lib/league.js';
+// GET /api/tick?job=daily|morning|schedule|scores   (Authorization: Bearer <CRON_SECRET>)
+// Vercel cron (vercel.json) calls:
+//   daily    at 12:00 UTC (5 AM Mountain, 6 AM during daylight saving): schedule refresh + yesterday's scores.
+//   morning  at 16:00 UTC (9 AM Mountain / 11 AM Eastern): yesterday's result + tonight's to-do, by push.
+// Both run once per Mountain day; add &force=1 to run again now (first-time schedule load, catch-up, testing).
+import { dailyJob, morningJob, syncSchedule, syncScores, batchClock } from '../lib/league.js';
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const job = req.query.job || 'daily';
     const force = req.query.force === '1';
     if (job === 'daily') await dailyJob(log, force);
-    else if (job === 'notify') await notifyAll(log);
+    else if (job === 'morning') await morningJob(log, force);
     else if (job === 'schedule') await syncSchedule(log);
     else if (job === 'scores') await syncScores(log);
     else return res.status(400).json({ error: 'unknown job' });
