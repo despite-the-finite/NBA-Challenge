@@ -5,6 +5,8 @@
 // Both run once per Mountain day; add &force=1 to run again now (first-time schedule load, catch-up, testing).
 import { dailyJob, morningJob, syncSchedule, syncScores, batchClock } from '../lib/league.js';
 
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.authorization || '';

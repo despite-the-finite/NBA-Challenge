@@ -7,6 +7,8 @@ import { rowToGame, loadRules, syncSchedule } from '../lib/league.js';
 import { once } from '../lib/notify.js';
 import { vapidKeys } from '../lib/notify.js';
 
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   try {
     const me = await requirePlayer(req, res); if (!me) return;

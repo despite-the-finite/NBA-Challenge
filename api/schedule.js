@@ -6,6 +6,8 @@ import { syncSchedule } from '../lib/league.js';
 import { gameKey } from '../lib/feeds.js';
 import { TEAMS } from '../js/teams.js';
 
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

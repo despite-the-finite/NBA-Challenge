@@ -451,11 +451,13 @@ function bindGlobal() {
   $$('[data-act="switch"]').forEach(b => b.onclick = () => store.switchPlayer(otherPlayer(store.me)));
   $$('[data-act="advance"]').forEach(b => b.onclick = () => { store.advanceDay(); toast(`Demo clock: now ${fmtLong(etDate(store.now()))}`); });
   $$('[data-act="signout"]').forEach(b => b.onclick = () => store.signOut());
-  $$('[data-act="loadschedule"]').forEach(b => b.onclick = () => guard(async () => {
+  $$('[data-act="loadschedule"]').forEach(b => b.onclick = async () => {
     b.disabled = true; const st = $('#loadsched-status');
-    try { const r = await store.loadScheduleFromBrowser(msg => { if (st) st.textContent = msg; }); toast(`Schedule loaded: ${r.inserted} new games`); }
+    const say = (msg, bad = false) => { if (st) { st.textContent = msg; st.style.color = bad ? 'var(--bad)' : ''; } };
+    try { const r = await store.loadScheduleFromBrowser(say); toast(`Schedule loaded: ${r.inserted} new games`); }
+    catch (e) { say(`Could not load: ${e.message || e}`, true); console.error(e); }
     finally { b.disabled = false; }
-  }));
+  });
 }
 function bindSlate() {
   $$('[data-date]').forEach(b => b.onclick = () => { ui.date = b.dataset.date; render(); });
