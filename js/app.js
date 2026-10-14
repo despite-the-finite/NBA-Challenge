@@ -1,7 +1,7 @@
 // NBA Challenge web app. Renders four views (Slate, Standings, History, Settings) from the store.
 import { createStore, DemoStore } from './store.js';
 import { TEAMS, teamLogo, teamName } from './teams.js';
-import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick } from './scoring.js';
+import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick, countsForChallenge } from './scoring.js';
 
 const CFG = window.NBA_CONFIG;
 let store = createStore(CFG);
@@ -149,7 +149,7 @@ function renderSlate(games, standings) {
   return `<section class="view" id="view-slate">
     <div class="daystrip">${chips}</div>
     <div class="dayhead">
-      <div><h2>${esc(fmtLong(ui.date))}</h2><div class="sub">${dayGames.length ? `${dayGames.length} game${dayGames.length > 1 ? 's' : ''} · first tip ${esc(fmtTime(first.tipoff))}` : 'No games'}${dayGames.some(g => g.cup) ? ' · NBA Cup night' : ''}</div></div>
+      <div><h2>${esc(fmtLong(ui.date))}</h2><div class="sub">${dayGames.length ? `${dayGames.filter(countsForChallenge).length} Challenge game${dayGames.filter(countsForChallenge).length === 1 ? '' : 's'}${day.cupGames ? ` + ${day.cupGames} NBA Cup` : ''} · first tip ${esc(fmtTime(first.tipoff))}` : 'No games'}</div></div>
       ${anyFinal ? `<div class="dayscore num" title="Points this day"><span class="u">${day.UP.total}</span><span class="vs">${esc(name('UP'))} · ${esc(name('KP'))}</span><span class="k">${day.KP.total}</span></div>` : ''}
     </div>
     ${notices}
@@ -160,6 +160,7 @@ function notice(kind, ico, html) { return `<div class="notice ${kind}"><span cla
 function pickProgress(player, games) {
   let total = 0, done = 0;
   for (const g of games) {
+    if (!countsForChallenge(g)) continue;
     const mine = store.pickFor(g.id, player) || {}; const opp = store.pickFor(g.id, otherPlayer(player)) || {};
     total++; if (mine.winner) done++;
     if (g.selector === player) { total++; if (mine.line != null) done++; }
@@ -171,6 +172,7 @@ function pickProgress(player, games) {
 function renderCard(g, now, readOnly = false) {
   const me = store.me, opp = otherPlayer(me);
   const locked = isLocked(g, now), final = g.status === 'final';
+  if (g.cup) return renderCupCard(g, now);
   const editable = !readOnly && store.canEdit(g);
   const picks = store.picksFor(g.id);
   const mine = picks[me] || {}, theirs = picks[opp] || {};
@@ -235,6 +237,18 @@ function renderCard(g, now, readOnly = false) {
   </article>`;
 }
 
+function renderCupCard(g, now) {
+  const final = g.status === 'final', winner = gameWinner(g), margin = gameMargin(g);
+  const team = (code, scoreVal) => { const t = TEAMS[code]; return `<div class="team ${final ? (winner === code ? 'won' : 'lost') : ''}" style="cursor:default">
+      <img class="logo" src="${teamLogo(code)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'${code}',style:'background:${t.color}'}))">
+      <span class="abbr">${code}</span><span class="nm">${esc(t.name)}</span>${final ? `<span class="score num">${scoreVal ?? ''}</span>` : ''}</div>`; };
+  return `<article class="card cup ${final ? 'final' : ''}" id="g-${esc(g.id)}" style="border-color:color-mix(in oklab, var(--court) 45%, var(--line))">
+    <div class="card-head"><span class="time">${esc(fmtTime(g.tipoff))}</span><span class="arena">${esc(g.arena || '')}</span><span class="spacer"></span><span class="pill cup">NBA Cup</span>${final ? '<span class="pill">Final</span>' : g.status === 'postponed' ? '<span class="pill">Postponed</span>' : ''}</div>
+    <div class="matchup">${team(g.away, g.awayScore)}<div class="at">${final ? `<span class="margin">margin<b class="num">${margin}</b></span>` : '@'}</div>${team(g.home, g.homeScore)}</div>
+    <div class="card-foot"><span>🏆 NBA Cup game. Not scored in the Challenge; the Cup bracket is a separate game coming later.</span></div>
+  </article>`;
+}
+
 /* ---------------- Standings ---------------- */
 function renderStandings(games, st) {
   if (ui.season === 'last') return renderLastSeason();
@@ -273,6 +287,7 @@ function rulesList() {
     <li><span class="pt">+${r.winnerPoint}</span><span>Pick the winner.</span></li>
     <li><span class="pt">+${r.spreadPoint}</span><span>Win the margin duel. The selector posts a line (the margin of victory). The other player calls Over or Under. Right call: the caller takes the point. Wrong call: the selector takes it. ${r.push === 'selector' ? 'An exact push counts as a miss, so the selector takes it.' : 'An exact push gives nobody the point.'}</span></li>
     <li><span class="pt">+${r.showUpBonus}</span><span>Show-up bonus: if you make picks on a day and your brother makes none, you get +${r.showUpBonus}.</span></li>
+    <li><span class="pt">🏆</span><span>NBA Cup games are shown on the slate but sit outside the Challenge: no picks, no points. A separate Cup bracket game is coming.</span></li>
     <li><span class="pt">⏱</span><span>Picks lock at tip-off, game by game. You can pick up to ${r.pickWindowDays} days ahead. A line freezes once it has been answered.</span></li>
     <li><span class="pt">⚠️</span><span>${r.noLine === 'responder' ? 'Selector never posts a line: the other player takes the duel point (if they made a pick on that game).' : 'Selector never posts a line: nobody gets the duel point.'} ${r.unansweredLine === 'selector' ? 'Line posted but never answered: the selector takes the point.' : 'Line posted but never answered: nobody gets the point.'}</span></li>
   </ul>`;
@@ -331,7 +346,7 @@ function renderLastSeason() {
   const games = [], picks = new Map();
   d.games.forEach((g, i) => {
     const homeWon = g.winner === g.home;
-    const game = { id: 'h' + i, date: g.date, tipoff: g.tipoff, home: g.home, away: g.away, arena: g.arena, cup: g.cup, selector: g.selector, status: 'final', homeScore: homeWon ? 100 + g.margin : 100, awayScore: homeWon ? 100 : 100 + g.margin };
+    const game = { id: 'h' + i, date: g.date, tipoff: g.tipoff, home: g.home, away: g.away, arena: g.arena, cup: false /* Cup games counted in 24-25 */, selector: g.selector, status: 'final', homeScore: homeWon ? 100 + g.margin : 100, awayScore: homeWon ? 100 : 100 + g.margin };
     const p = { UP: { winner: g.picks.UP }, KP: { winner: g.picks.KP } };
     p[g.selector].line = g.line; p[otherPlayer(g.selector)].ou = g.ou;
     games.push(game); picks.set(game.id, p);
@@ -359,7 +374,7 @@ function renderHistory(st) {
     const cls = d.dayWinner === 'UP' ? 'win-up' : d.dayWinner === 'KP' ? 'win-kp' : 'tie';
     const open = ui.expanded === d.date;
     return `<button class="dayrow ${cls}" data-expand="${d.date}" aria-expanded="${open}">
-      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} games${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · scores arrive at 5 AM MT'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
+      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} game${d.games.length === 1 ? '' : 's'}${d.cupGames ? ` (+${d.cupGames} Cup)` : ''}${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · scores arrive at 5 AM MT'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
       <span class="s num"><span class="u">${d.UP.total}</span><span class="d2">–</span><span class="k">${d.KP.total}</span></span>
     </button>${open ? `<div class="games" style="margin:4px 0 10px">${d.games.map(x => renderCard(x.game, store.now(), true)).join('')}</div>` : ''}`;
   }).join('')}</div></section>`;

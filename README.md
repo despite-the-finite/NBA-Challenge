@@ -32,7 +32,8 @@ Other mechanics:
 * Picks lock **per game at tip-off**. Scores and points arrive in one batch at **5 AM Mountain** the next morning (one feed request per game day, nothing in between).
 * A line **freezes once it has been answered**, so the selector can't move it after seeing the call.
 * Your winner pick is **hidden from your brother until tip-off** (the line and the call are always visible, they have to be).
-* NBA Cup group/knockout games count as regular-season games (the Cup final does not). Postponed games drop out and come back on their new date.
+* **NBA Cup games are outside the Challenge.** They appear on the slate with a Cup label, take no picks and score nothing; a separate Cup bracket game is planned. They also don't use up a selector turn. Postponed games drop out and come back on their new date.
+* The **Monday check** (part of the 5 AM batch) re-reads the schedule: new games such as Cup knockout rounds, moved tip-offs, postponements and cancellations. ESPN labels Cup games in its event notes, which is how new ones get flagged.
 
 ## What's in the app
 

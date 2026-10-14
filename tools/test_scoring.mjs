@@ -43,3 +43,18 @@ const r5 = scoreGame(g, { UP: { winner: 'BOS' }, KP: {} });
 console.assert(r5.UP.total === 1 && r5.KP.total === 0, 'no line, responder absent -> nobody');
 console.assert(isValidLine(7) && !isValidLine(7.5) && isValidLine(7.5, { ...DEFAULT_RULES, halfPointLines: true }) && !isValidLine(0), 'line validation');
 console.log('all scoring checks passed; days:', st.days.length, 'UP days won', st.UP.daysWon, 'KP days won', st.KP.daysWon, 'streak', st.UP.streak, st.KP.streak);
+
+/* ---- NBA Cup games are visible but never scored ---- */
+import { scoreDay, missingPicks, isPickable, assignSelector } from '../js/scoring.js';
+const cupDay = [
+  { id: 'a', date: '2026-11-13', tipoff: '2026-11-14T00:00:00Z', home: 'BOS', away: 'NYK', selector: 'UP', status: 'final', homeScore: 100, awayScore: 90, cup: false },
+  { id: 'b', date: '2026-11-13', tipoff: '2026-11-14T00:30:00Z', home: 'LAL', away: 'DEN', selector: 'KP', status: 'final', homeScore: 100, awayScore: 90, cup: true },
+];
+const cupPicks = { a: { UP: { winner: 'BOS', line: 5 }, KP: { winner: 'BOS', ou: 'O' } }, b: { UP: { winner: 'LAL', line: 5 }, KP: { winner: 'LAL', ou: 'O' } } };
+const cd = scoreDay('2026-11-13', cupDay, cupPicks);
+console.assert(cd.games.length === 1 && cd.cupGames === 1, 'cup game excluded from the day');
+console.assert(cd.UP.total === 1 && cd.KP.total === 2, 'only the Challenge game scores');
+console.assert(!isPickable(cupDay[1], DEFAULT_RULES, new Date('2026-11-10T00:00:00Z')), 'cup games are not pickable');
+console.assert(missingPicks('UP', cupDay, {}).length === 1, 'cup games are not owed');
+console.assert(assignSelector(cupDay[0], cupDay, '2026-10-20') === assignSelector(cupDay[0], [cupDay[0]], '2026-10-20'), 'cup games do not shift the rotation');
+console.log('cup rules passed');

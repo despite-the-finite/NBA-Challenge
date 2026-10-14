@@ -36,11 +36,17 @@ export function otherPlayer(code) {
   return code === 'UP' ? 'KP' : 'UP';
 }
 
+/** NBA Cup games are shown on the slate but sit outside the Challenge: no picks, no points, no selector turn. */
+export function countsForChallenge(game) {
+  return !game.cup && game.status !== 'postponed';
+}
+
 export function isLocked(game, now = new Date()) {
   return new Date(game.tipoff).getTime() <= now.getTime() || game.status === 'final' || game.status === 'live';
 }
 
 export function isPickable(game, rules = DEFAULT_RULES, now = new Date()) {
+  if (!countsForChallenge(game)) return false;
   if (isLocked(game, now)) return false;
   const windowMs = rules.pickWindowDays * 24 * 3600 * 1000;
   return new Date(game.tipoff).getTime() - now.getTime() <= windowMs;
@@ -49,7 +55,7 @@ export function isPickable(game, rules = DEFAULT_RULES, now = new Date()) {
 /** Deterministic selector for a game: alternate within the day, and alternate the
  *  day's starting player by the day's parity, so both players select ~equally. */
 export function assignSelector(game, dayGames, seasonStartDate) {
-  const sorted = [...dayGames].sort(compareGames);
+  const sorted = [...dayGames].filter(g => !g.cup || g.id === game.id).sort(compareGames);
   const idx = Math.max(0, sorted.findIndex(g => g.id === game.id));
   const dayIndex = daysBetween(seasonStartDate, game.date);
   return (idx + dayIndex) % 2 === 0 ? 'UP' : 'KP';
@@ -146,9 +152,11 @@ export function dayIsSettled(dayGames) {
  * Score a whole day. picksByGame: Map/obj gameId -> {UP:{...},KP:{...}}
  * Returns { date, UP:{winner,spread,bonus,total,picked}, KP:{...}, games:[{game, score}], settled, dayWinner }
  */
-export function scoreDay(date, dayGames, picksByGame, rules = DEFAULT_RULES) {
+export function scoreDay(date, allDayGames, picksByGame, rules = DEFAULT_RULES) {
   const tally = { UP: { winner: 0, spread: 0, bonus: 0, total: 0, picked: 0 }, KP: { winner: 0, spread: 0, bonus: 0, total: 0, picked: 0 } };
   const games = [];
+  const dayGames = allDayGames.filter(countsForChallenge);
+  const cupGames = allDayGames.filter(g => g.cup).length;
   for (const g of dayGames) {
     const picks = (picksByGame instanceof Map ? picksByGame.get(g.id) : picksByGame[g.id]) || {};
     for (const p of PLAYER_CODES) if (hasAnyPick(picks[p])) tally[p].picked++;
@@ -158,7 +166,7 @@ export function scoreDay(date, dayGames, picksByGame, rules = DEFAULT_RULES) {
   }
   const settled = dayIsSettled(dayGames);
   // Show-up bonus: once the day is over, the player who picked gets a bonus if the other picked nothing.
-  const dayOver = settled || dayGames.every(g => isLocked(g));
+  const dayOver = dayGames.length > 0 && (settled || dayGames.every(g => isLocked(g)));
   if (dayOver && rules.showUpBonus > 0) {
     if (tally.UP.picked > 0 && tally.KP.picked === 0) tally.UP.bonus = rules.showUpBonus;
     if (tally.KP.picked > 0 && tally.UP.picked === 0) tally.KP.bonus = rules.showUpBonus;
@@ -166,16 +174,16 @@ export function scoreDay(date, dayGames, picksByGame, rules = DEFAULT_RULES) {
   for (const p of PLAYER_CODES) tally[p].total = tally[p].winner + tally[p].spread + tally[p].bonus;
   let dayWinner = null;
   if (settled) dayWinner = tally.UP.total > tally.KP.total ? 'UP' : tally.KP.total > tally.UP.total ? 'KP' : 'tie';
-  return { date, ...tally, games, settled, dayWinner };
+  return { date, ...tally, games, settled, dayWinner, cupGames };
 }
 
 /** Season standings and fun stats from all games + picks. */
 export function computeStandings(games, picksByGame, rules = DEFAULT_RULES) {
   const days = [];
-  for (const [date, dayGames] of groupByDate(games)) days.push(scoreDay(date, dayGames, picksByGame, rules));
+  for (const [date, dayGames] of groupByDate(games)) { const d = scoreDay(date, dayGames, picksByGame, rules); if (d.games.length) days.push(d); }
   const s = {
     UP: blankStats(), KP: blankStats(), days, race: [],
-    gamesFinal: games.filter(g => g.status === 'final').length,
+    gamesFinal: games.filter(g => g.status === 'final' && countsForChallenge(g)).length,
   };
   let cum = { UP: 0, KP: 0 };
   for (const d of days) {
@@ -254,6 +262,7 @@ export function isValidLine(line, rules = DEFAULT_RULES) {
 export function missingPicks(player, games, picksByGame) {
   const todo = [];
   for (const g of games) {
+    if (!countsForChallenge(g)) continue;
     const picks = (picksByGame instanceof Map ? picksByGame.get(g.id) : picksByGame[g.id]) || {};
     const mine = picks[player] || {};
     const opp = picks[otherPlayer(player)] || {};
