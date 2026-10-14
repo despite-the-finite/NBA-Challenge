@@ -82,3 +82,11 @@ assert.deepEqual(batchClock(new Date('2026-12-01T12:30:00Z')), { date: '2026-12-
 assert.deepEqual(batchClock(new Date('2026-10-20T12:30:00Z')), { date: '2026-10-20', time: '06:30' }, 'MDT');
 assert.deepEqual(batchClock(new Date('2026-12-02T04:30:00Z')), { date: '2026-12-01', time: '21:30' }, 'late evening is still the same Mountain day');
 console.log('batch clock passed');
+
+/* ---- ESPN per-team schedule parser ---- */
+const { parseEspnTeamEvent } = await import('../lib/feeds.js');
+const te = parseEspnTeamEvent({ id: '401900001', date: '2026-10-21T23:30Z', seasonType: { type: 2 }, competitions: [{ venue: { fullName: 'TD Garden' }, status: { type: { state: 'pre', completed: false } },
+  competitors: [{ homeAway: 'home', team: { abbreviation: 'BOS' }, score: { value: 0, displayValue: '0' } }, { homeAway: 'away', team: { abbreviation: 'NY' }, score: { value: 0 } }] }] });
+assert.equal(te.id, 'g:20261021-NYK-BOS'); assert.equal(te.status, 'scheduled'); assert.equal(te.homeScore, null);
+assert.equal(parseEspnTeamEvent({ id: '1', date: '2026-10-10T23:30Z', seasonType: { type: 1 }, competitions: [{ competitors: [] }] }), null, 'preseason skipped');
+console.log('team schedule parser passed');
