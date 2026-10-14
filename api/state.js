@@ -3,7 +3,8 @@
 // The other player's winner pick is hidden (winner:null, has_winner:true) until that game tips off.
 import { sql } from '../lib/db.js';
 import { requirePlayer } from '../lib/auth.js';
-import { rowToGame, loadRules } from '../lib/league.js';
+import { rowToGame, loadRules, syncSchedule } from '../lib/league.js';
+import { once } from '../lib/notify.js';
 import { vapidKeys } from '../lib/notify.js';
 
 export default async function handler(req, res) {
@@ -12,6 +13,11 @@ export default async function handler(req, res) {
     const since = req.query.since ? new Date(req.query.since) : null;
     if (since && isNaN(since)) return res.status(400).json({ error: 'bad since' });
     const now = new Date();
+    if (!since) {
+      // First run after deploy: an empty games table loads the schedule once. Scores never load here.
+      const [{ n }] = await sql()`select count(*)::int as n from games`;
+      if (n === 0 && await once('bootstrap:schedule')) { try { await syncSchedule(); } catch (e) { console.error('bootstrap schedule failed', e); } }
+    }
     const [players, rules, games, picks] = await Promise.all([
       since ? [] : sql()`select code, name, color, tz, reminder_time, notify_pretip, notify_lines, notify_results from players order by code`,
       since ? null : loadRules(),
