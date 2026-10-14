@@ -67,7 +67,7 @@ Already done: the Neon project **NBA Challenge** (`quiet-flower-84539406`, datab
    ```
    No internet on the server? Download `https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json` in a browser and run `DATABASE_URL=... node tools/import_schedule.mjs scheduleLeagueV2_1.json --db`.
 
-3. **The 5 AM Mountain batch** runs by itself: `vercel.json` schedules `/api/tick?job=daily` at 12:00 UTC, which is 5 AM Mountain (6 AM during daylight saving, i.e. the first two weeks and the last month of the season). It refreshes the schedule, scores every game that has tipped off (normally one feed request, for yesterday) and marks postponed games. Nothing touches the NBA feeds at any other time, and opening the app never triggers a fetch.
+3. **The 5 AM Mountain batch** runs by itself: `vercel.json` schedules `/api/tick?job=daily` at 12:00 UTC, which is 5 AM Mountain (6 AM during daylight saving, i.e. the first two weeks and the last month of the season). It scores every game that has tipped off (normally one feed request, for yesterday), marks postponed games, and refreshes the schedule once a week (Mondays). Feeds are tried in order: NBA.com, ESPN scoreboard, ESPN per-team schedules; Settings → About also offers "Refresh from this device", which fetches the schedule in your browser and hands it to the server. Nothing touches the NBA feeds at any other time, and opening the app never triggers a fetch.
 
    **The morning message** is the second cron, `/api/tick?job=morning` at 16:00 UTC (9 AM Mountain, 11 AM Eastern). It reads the database and sends one push to each of you; it never calls the feeds. Vercel's free plan allows exactly these two daily crons, so there is no other scheduler, no GitHub workflow, nothing else to configure.
 
