@@ -208,6 +208,18 @@ export class LiveStore extends BaseStore {
     this.emit();
   }
   async setRules(patch) { const r = await this.call('/settings', { method: 'POST', body: { rules: patch } }); this.rules = { ...DEFAULT_RULES, ...r.rules }; this.emit(); }
+  /** Fetch the season schedule from ESPN in this browser and hand it to the server. */
+  async loadScheduleFromBrowser(onProgress = () => {}) {
+    const { fetchEspnTeamSchedules } = await import('../lib/feeds.js');
+    const endYear = Number((this.season || this.config.SEASON).slice(0, 4)) + 1;
+    onProgress('Fetching 30 team schedules from ESPN…');
+    const games = await fetchEspnTeamSchedules(endYear);
+    if (games.length < 100) throw new Error(`ESPN returned only ${games.length} regular-season games.`);
+    onProgress(`Sending ${games.length} games to the server…`);
+    const r = await this.call('/schedule', { method: 'POST', body: { games } });
+    await this.loadAll(); this.emit();
+    return r;
+  }
   async setPlayerNames(names) { await this.call('/settings', { method: 'POST', body: { names } }); for (const p of PLAYER_CODES) if (names[p]) this.players[p].name = names[p]; this.emit(); }
   async savePrefs(prefs) { await this.call('/settings', { method: 'POST', body: { prefs } }); Object.assign(this.prefs, prefs); this.emit(); }
   myPrefs() { return this.prefs || {}; }
