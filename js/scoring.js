@@ -23,7 +23,7 @@ export const DEFAULT_RULES = {
   // Bonus for the player who made picks on a day the other player made none.
   showUpBonus: 2,
   // How far ahead picks open.
-  pickWindowDays: 7,
+  pickWindowDays: 14,
   // Allow half-point lines (no pushes) in addition to whole numbers.
   halfPointLines: false,
   lineMin: 1,

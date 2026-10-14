@@ -6,7 +6,7 @@ import { DEFAULT_RULES } from '../js/scoring.js';
 
 const RULE_CHECKS = {
   push: v => ['nobody', 'selector'].includes(v), unansweredLine: v => ['selector', 'nobody'].includes(v), noLine: v => ['responder', 'nobody'].includes(v),
-  showUpBonus: v => Number.isInteger(v) && v >= 0 && v <= 10, pickWindowDays: v => Number.isInteger(v) && v >= 1 && v <= 14,
+  showUpBonus: v => Number.isInteger(v) && v >= 0 && v <= 10, pickWindowDays: v => Number.isInteger(v) && v >= 1 && v <= 30,
   halfPointLines: v => typeof v === 'boolean', winnerPoint: v => Number.isInteger(v) && v >= 0 && v <= 5, spreadPoint: v => Number.isInteger(v) && v >= 0 && v <= 5,
   lineMin: v => Number.isInteger(v) && v >= 0 && v <= 10, lineMax: v => Number.isInteger(v) && v >= 10 && v <= 60,
 };

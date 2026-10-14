@@ -25,7 +25,7 @@ House rules you can toggle in Settings (both players see the same rules):
 * **Half-point lines** (7.5): removes pushes altogether.
 * **Line never posted**: the other player takes the duel point (if they picked that game), or nobody.
 * **Line never answered**: the selector takes the point, or nobody.
-* **Show-up bonus** amount and **pick window** (default: 7 days ahead).
+* **Show-up bonus** amount and **pick window** (default: 14 days ahead).
 
 Other mechanics:
 
@@ -37,7 +37,7 @@ Other mechanics:
 
 ## What's in the app
 
-* **Slate**: a strip from yesterday through a week ahead with a progress bar per day, then one card per game: tap a team to pick the winner, post or adjust your line with the stepper, or call Over/Under. Cards show lock countdowns, live scores, final margins and who earned what.
+* **Slate**: a strip from yesterday through two weeks ahead with a progress bar per day, then one card per game: tap a team to pick the winner, post or adjust your line with the stepper, or call Over/Under. Cards show lock countdowns, live scores, final margins and who earned what.
 * **Standings**: season score tiles, the cumulative "race" chart, and stats (days won, streaks, winner %, Over/Under %, lines defended, bonuses, perfect days, best day). A toggle shows **last season's** full numbers from the spreadsheet (UP 290, KP 267).
 * **History**: every completed day with the day score; tap to expand the games.
 * **Settings**: names, PIN, notifications (daily reminder time, pre-tip nudge, "line posted" alerts, nightly result), house rules, theme.

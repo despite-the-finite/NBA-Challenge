@@ -112,7 +112,7 @@ function renderSlate(games, standings) {
   const todayET = etDate(now);
   const byDate = groupByDate(games);
   const dates = [];
-  for (let i = -1; i <= 9; i++) { const d = addDays(todayET, i); if (byDate.has(d) || d === todayET) dates.push(d); }
+  for (let i = -1; i <= store.rules.pickWindowDays + 1; i++) { const d = addDays(todayET, i); if (byDate.has(d) || d === todayET) dates.push(d); }
   if (!ui.date || !dates.includes(ui.date)) ui.date = byDate.has(todayET) ? todayET : (dates.find(d => d > todayET && byDate.has(d)) || todayET);
   const dayGames = byDate.get(ui.date) || [];
   const day = scoreDay(ui.date, dayGames, store.picks, store.rules);
@@ -404,7 +404,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Line never posted</b><span>The selector forgot to set a line.</span></div><select data-rule="noLine">${opt('responder', r.noLine, 'Other player scores')}${opt('nobody', r.noLine, 'Nobody scores')}</select></div>
       <div class="switch"><div class="lbl"><b>Line never answered</b><span>The other player never called Over/Under.</span></div><select data-rule="unansweredLine">${opt('selector', r.unansweredLine, 'Selector scores')}${opt('nobody', r.unansweredLine, 'Nobody scores')}</select></div>
       <div class="switch"><div class="lbl"><b>Show-up bonus</b><span>Points for picking on a day your brother skipped.</span></div><input type="number" min="0" max="10" step="1" data-rule-num="showUpBonus" value="${r.showUpBonus}"></div>
-      <div class="switch"><div class="lbl"><b>Pick window</b><span>How many days ahead picks open.</span></div><input type="number" min="1" max="14" step="1" data-rule-num="pickWindowDays" value="${r.pickWindowDays}"></div>
+      <div class="switch"><div class="lbl"><b>Pick window</b><span>How many days ahead picks open.</span></div><input type="number" min="1" max="30" step="1" data-rule-num="pickWindowDays" value="${r.pickWindowDays}"></div>
       <div class="faint" style="font-size:12px">Rule changes apply to every game, including ones already scored. Agree on them together before the season starts.</div>
     </div>
     <div class="section"><h3>Appearance</h3>
