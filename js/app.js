@@ -143,6 +143,9 @@ function renderSlate(games, standings) {
     if (day.UP.bonus || day.KP.bonus) { const w = day.UP.bonus ? 'UP' : 'KP'; notices += notice('good', '🎁', `<strong>Show-up bonus:</strong> ${esc(name(otherPlayer(w)))} made no picks this day, so ${esc(name(w))} gets +${store.rules.showUpBonus}.`); }
   }
 
+  if (store.mode === 'live' && store.games.size === 0) {
+    return `<section class="view" id="view-slate"><div class="empty"><div class="big">📡</div><b>Schedule not loaded yet</b><div class="muted">The app tries to pull the NBA schedule when it opens on an empty database.${store.lastSyncError ? `<br><br><span style="color:var(--bad)">${esc(store.lastSyncError)}</span>` : ' Pull down to refresh in a minute.'}</div></div></section>`;
+  }
   return `<section class="view" id="view-slate">
     <div class="daystrip">${chips}</div>
     <div class="dayhead">
@@ -396,7 +399,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Advance the demo clock one day</b><span>Past games get simulated finals and random picks for both players.</span></div><button class="btn small" data-act="advance">Advance ⏩</button></div>
       <div class="switch"><div class="lbl"><b>Reset the demo</b><span>Clears all demo picks and results from this browser.</span></div><button class="btn small danger" data-act="reset">Reset</button></div>
     </div>` : ''}
-    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet (run the daily job with force=1)'}</dd>` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
+    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet'}</dd>${store.lastSyncError ? `<dt>Last sync error</dt><dd style="color:var(--bad)">${esc(store.lastSyncError)}<br><span class="faint">${esc(new Date(store.lastSyncErrorAt).toLocaleString())}</span></dd>` : ''}` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
   </section>`;
 }
 

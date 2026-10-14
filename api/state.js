@@ -16,7 +16,10 @@ export default async function handler(req, res) {
     if (!since) {
       // First run after deploy: an empty games table loads the schedule once. Scores never load here.
       const [{ n }] = await sql()`select count(*)::int as n from games`;
-      if (n === 0 && await once('bootstrap:schedule')) { try { await syncSchedule(); } catch (e) { console.error('bootstrap schedule failed', e); } }
+      if (n === 0) {
+        const slot = Math.floor(Date.now() / (10 * 60e3));   // at most one attempt per 10 minutes
+        if (await once(`bootstrap:schedule:${slot}`)) { try { await syncSchedule(); } catch (e) { console.error('bootstrap schedule failed', e); } }
+      }
     }
     const [players, rules, games, picks] = await Promise.all([
       since ? [] : sql()`select code, name, color, tz, reminder_time, notify_pretip, notify_lines, notify_results from players order by code`,
@@ -35,8 +38,9 @@ export default async function handler(req, res) {
       out.players = players.map(p => ({ code: p.code, name: p.name, color: p.color, ...(p.code === me ? { tz: p.tz, reminder_time: p.reminder_time, notify_pretip: p.notify_pretip, notify_lines: p.notify_lines, notify_results: p.notify_results } : {}) }));
       out.rules = rules;
       out.vapidPublicKey = (await vapidKeys()).publicKey;
-      const [s] = await sql()`select season, last_schedule_sync, last_scores_sync from settings where id = 1`;
+      const [s] = await sql()`select season, last_schedule_sync, last_scores_sync, last_sync_error, last_sync_error_at from settings where id = 1`;
       out.season = s?.season; out.lastScheduleSync = s?.last_schedule_sync; out.lastScoresSync = s?.last_scores_sync;
+      out.lastSyncError = s?.last_sync_error || null; out.lastSyncErrorAt = s?.last_sync_error_at || null;
     }
     return res.status(200).json(out);
   } catch (e) { console.error(e); return res.status(500).json({ error: e.message }); }

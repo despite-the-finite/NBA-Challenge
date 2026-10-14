@@ -26,8 +26,11 @@ create table if not exists settings (
   last_schedule_sync  timestamptz,
   session_secret      text,     -- generated on first use (signs login cookies)
   vapid_public        text,     -- generated on first use (web push keys)
-  vapid_private       text
+  vapid_private       text,
+  last_sync_error     text,     -- most recent feed/sync failure, shown in Settings -> About
+  last_sync_error_at  timestamptz
 );
+alter table settings add column if not exists last_sync_error text, add column if not exists last_sync_error_at timestamptz;
 alter table settings add column if not exists session_secret text, add column if not exists vapid_public text, add column if not exists vapid_private text;
 insert into settings (id) values (1) on conflict do nothing;
 

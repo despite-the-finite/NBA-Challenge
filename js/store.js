@@ -184,7 +184,7 @@ export class LiveStore extends BaseStore {
     for (const p of s.players || []) { this.players[p.code] = { ...this.players[p.code], name: p.name, color: p.color || this.players[p.code].color }; if (p.code === this.me) this.prefs = p; }
     if (s.rules) this.rules = { ...DEFAULT_RULES, ...s.rules };
     this.vapidPublicKey = s.vapidPublicKey || '';
-    this.season = s.season; this.lastScheduleSync = s.lastScheduleSync; this.lastScoresSync = s.lastScoresSync;
+    this.season = s.season; this.lastScheduleSync = s.lastScheduleSync; this.lastScoresSync = s.lastScoresSync; this.lastSyncError = s.lastSyncError; this.lastSyncErrorAt = s.lastSyncErrorAt;
   }
   ingest(s) {
     for (const g of s.games || []) this.games.set(g.id, g);
