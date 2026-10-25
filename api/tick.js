@@ -3,6 +3,7 @@
 //   daily    at 12:00 UTC (5 AM Mountain, 6 AM during daylight saving): schedule refresh + yesterday's scores.
 //   morning  at 16:00 UTC (9 AM Mountain / 11 AM Eastern): yesterday's result + tonight's to-do, by push.
 // Both run once per Mountain day; add &force=1 to run again now (first-time schedule load, catch-up, testing).
+import { migrate } from '../lib/db.js';
 import { dailyJob, morningJob, syncSchedule, syncScores, batchClock } from '../lib/league.js';
 
 export const config = { maxDuration: 60 };
@@ -15,6 +16,7 @@ export default async function handler(req, res) {
   try {
     const job = req.query.job || 'daily';
     const force = req.query.force === '1';
+    await migrate();
     if (job === 'daily') await dailyJob(log, force);
     else if (job === 'morning') await morningJob(log, force);
     else if (job === 'schedule') await syncSchedule(log);

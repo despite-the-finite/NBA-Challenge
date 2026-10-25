@@ -5,7 +5,7 @@
   "type": "module",
   "description": "UP vs KP: season-long NBA pick'em with margin duels. Static PWA + Vercel API + Neon Postgres.",
   "scripts": {
-    "test": "node tools/test_scoring.mjs && node tools/test_api.mjs",
+    "test": "node tools/test_scoring.mjs && node tools/test_api.mjs && node tools/test_cup.mjs",
     "dev": "vercel dev",
     "import-schedule": "node tools/import_schedule.mjs"
   },

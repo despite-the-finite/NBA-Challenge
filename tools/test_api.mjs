@@ -12,15 +12,21 @@ const nba = parseNbaSchedule({ leagueSchedule: { seasonYear: '2026-27', gameDate
   { gameId: '0022600001', gameStatus: 1, gameDateTimeUTC: '2026-10-20T23:30:00Z', homeTeam: { teamTricode: 'BOS' }, awayTeam: { teamTricode: 'NYK' }, arenaName: 'TD Garden', gameLabel: '', gameSubLabel: '' },
   { gameId: '0012600001', gameStatus: 1, gameDateTimeUTC: '2026-10-10T23:30:00Z', homeTeam: { teamTricode: 'LAL' }, awayTeam: { teamTricode: 'GSW' } },   // preseason: skipped
   { gameId: '0022600050', gameStatus: 3, gameDateTimeUTC: '2026-10-31T23:00:00Z', homeTeam: { teamTricode: 'NOP', score: 110 }, awayTeam: { teamTricode: 'UTA', score: 99 }, gameLabel: 'Emirates NBA Cup', gameSubLabel: 'West Group A' },
+  { gameId: '0022600900', gameStatus: 1, gameDateTimeUTC: '2026-12-10T00:30:00Z', homeTeam: { teamTricode: 'TBD' }, awayTeam: { teamTricode: 'TBD' }, gameLabel: 'Emirates NBA Cup', gameSubLabel: 'Quarterfinal' },   // field not set yet: skipped
+  { gameId: '0062600001', gameStatus: 1, gameDateTimeUTC: '2026-12-16T01:30:00Z', homeTeam: { teamTricode: 'MIL' }, awayTeam: { teamTricode: 'OKC' }, gameLabel: 'Emirates NBA Cup', gameSubLabel: 'Championship' },
 ] }] } });
-assert.equal(nba.length, 2);
-assert.equal(nba[0].id, 'g:20261020-NYK-BOS'); assert.equal(nba[0].date, '2026-10-20'); assert.equal(nba[0].status, 'scheduled');
-assert.equal(nba[1].cup, true); assert.equal(nba[1].status, 'final'); assert.equal(nba[1].homeScore, 110);
+assert.equal(nba.length, 3);
+assert.equal(nba[0].id, 'g:20261020-NYK-BOS'); assert.equal(nba[0].date, '2026-10-20'); assert.equal(nba[0].status, 'scheduled'); assert.equal(nba[0].cup, false); assert.equal(nba[0].cupStage, null);
+assert.equal(nba[1].cup, true); assert.equal(nba[1].cupStage, 'West A'); assert.equal(nba[1].status, 'final'); assert.equal(nba[1].homeScore, 110);
+assert.equal(nba[2].cup, true); assert.equal(nba[2].cupStage, 'F', 'the Cup final (006 game id) is kept for the bracket');
 const espn = parseEspnEvent({ id: '401', date: '2026-10-21T02:00Z', season: { type: 2 }, competitions: [{ venue: { fullName: 'Crypto.com Arena' }, status: { type: { state: 'in', completed: false }, period: 3, displayClock: '4:12' },
   competitors: [{ homeAway: 'home', team: { abbreviation: 'LAL' }, score: '80' }, { homeAway: 'away', team: { abbreviation: 'GS' }, score: '77' }] }] });
 assert.equal(espn.id, 'g:20261020-GSW-LAL');            // 02:00Z = 10 PM ET on Oct 20
 assert.equal(espn.status, 'live'); assert.equal(espn.clock, 'Q3 4:12'); assert.equal(espn.away, 'GSW');
 assert.equal(parseEspnEvent({ id: '1', date: '2026-10-21T02:00Z', season: { type: 1 }, competitions: [{ competitors: [] }] }), null);
+const espnCup = parseEspnEvent({ id: '402', date: '2026-12-13T01:00Z', season: { type: 2 }, competitions: [{ notes: [{ headline: 'Emirates NBA Cup - Semifinals' }], status: { type: { state: 'pre', completed: false } },
+  competitors: [{ homeAway: 'home', team: { abbreviation: 'OKC' } }, { homeAway: 'away', team: { abbreviation: 'HOU' } }] }] });
+assert.equal(espnCup.cup, true); assert.equal(espnCup.cupStage, 'SF');
 assert.equal(gameKey('2026-12-25', 'DEN', 'MIN'), 'g:20261225-DEN-MIN');
 
 /* ---- sessions & pins ---- */

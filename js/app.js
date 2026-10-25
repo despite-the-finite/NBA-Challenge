@@ -1,7 +1,10 @@
-// NBA Challenge web app. Renders four views (Slate, Standings, History, Settings) from the store.
+// NBA Challenge web app. Renders five views (Slate, Cup, Standings, History, Settings) from the store.
 import { createStore, DemoStore } from './store.js';
 import { TEAMS, teamLogo, teamName } from './teams.js';
-import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick, countsForChallenge } from './scoring.js';
+import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick } from './scoring.js';
+import { CUP_RULES, CONFERENCES, cupGroups, groupStandings, cupField, buildBracket, bracketOpen, bracketLocked, bracketMissing, scoreBracket, slotOptions, bracketOnly } from './cup.js';
+
+const VIEWS = ['slate', 'cup', 'standings', 'history', 'settings'];
 
 const CFG = window.NBA_CONFIG;
 let store = createStore(CFG);
@@ -22,6 +25,7 @@ const fmtTime = (iso) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', m
 const fmtDow = (ds) => new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(localDateObj(ds));
 const fmtLong = (ds) => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(localDateObj(ds));
 const fmtShort = (ds) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(localDateObj(ds));
+const fmtWhen = (iso) => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 function countdown(iso) {
   const ms = new Date(iso) - store.now();
   if (ms <= 0) return 'locked';
@@ -46,8 +50,8 @@ async function boot() {
     } else { $('#app').innerHTML = `<div class="empty"><div class="big">⚠️</div><b>Could not start</b><div>${esc(e.message)}</div></div>`; return; }
   }
   store.onChange(render);
-  window.addEventListener('hashchange', () => { const v = location.hash.replace('#', ''); if (['slate', 'standings', 'history', 'settings'].includes(v)) { ui.view = v; render(); } });
-  const v = location.hash.replace('#', ''); if (['slate', 'standings', 'history', 'settings'].includes(v)) ui.view = v;
+  window.addEventListener('hashchange', () => { const v = location.hash.replace('#', ''); if (VIEWS.includes(v)) { ui.view = v; render(); } });
+  const v = location.hash.replace('#', ''); if (VIEWS.includes(v)) ui.view = v;
   setInterval(() => { if (ui.view === 'slate') render(); }, 60000);
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   render();
@@ -63,17 +67,20 @@ function render() {
   document.documentElement.style.setProperty('--me-soft', `var(--${store.me.toLowerCase()}-soft)`);
   const todayET = etDate(store.now());
   const todo = missingPicks(store.me, games.filter(g => g.date === todayET && isPickable(g, store.rules, store.now())), store.picks).length;
+  const bracket = buildBracket(games);
+  const cupTodo = bracketOpen(bracket, store.now()) ? bracketMissing(store.cupPicksFor(store.me), bracket) : 0;
   app.innerHTML = `
     <div class="app">
       ${renderTopbar(standings)}
       <main>
-        ${ui.view === 'slate' ? renderSlate(games, standings) : ui.view === 'standings' ? renderStandings(games, standings) : ui.view === 'history' ? renderHistory(standings) : renderSettings()}
+        ${ui.view === 'slate' ? renderSlate(games, standings) : ui.view === 'cup' ? renderCup(games) : ui.view === 'standings' ? renderStandings(games, standings) : ui.view === 'history' ? renderHistory(standings) : renderSettings()}
       </main>
-      ${renderTabbar(todo)}
+      ${renderTabbar({ slate: todo, cup: cupTodo })}
     </div>
     <div class="toast" id="toast" role="status"></div>`;
   bindGlobal();
   if (ui.view === 'slate') bindSlate();
+  if (ui.view === 'cup') bindCup();
   if (ui.view === 'standings') bindChart();
   if (ui.view === 'settings') bindSettings();
 }
@@ -97,13 +104,14 @@ function renderTopbar(st) {
 
 const ICONS = {
   slate: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  cup: '<svg viewBox="0 0 24 24"><path d="M8 3h8v6a4 4 0 0 1-8 0V3zM8 5H5a3 3 0 0 0 3 5M16 5h3a3 3 0 0 1-3 5M12 13v4M8 21h8M9.5 17h5"/></svg>',
   standings: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
 };
-function renderTabbar(todo) {
-  const tabs = [['slate', 'Slate'], ['standings', 'Standings'], ['history', 'History'], ['settings', 'Settings']];
-  return `<nav class="tabbar"><div class="tabbar-inner">${tabs.map(([k, l]) => `<div class="tab-wrap"><button class="tab ${ui.view === k ? 'active' : ''}" data-view="${k}" aria-current="${ui.view === k}">${ICONS[k]}<span>${l}</span></button>${k === 'slate' && todo ? `<span class="count" title="Picks left today">${todo}</span>` : ''}</div>`).join('')}</div></nav>`;
+function renderTabbar(counts) {
+  const tabs = [['slate', 'Slate'], ['cup', 'Cup'], ['standings', 'Standings'], ['history', 'History'], ['settings', 'Settings']];
+  return `<nav class="tabbar"><div class="tabbar-inner">${tabs.map(([k, l]) => `<div class="tab-wrap"><button class="tab ${ui.view === k ? 'active' : ''}" data-view="${k}" aria-current="${ui.view === k}">${ICONS[k]}<span>${l}</span></button>${counts[k] ? `<span class="count" title="${k === 'cup' ? 'Bracket picks left' : 'Picks left today'}">${counts[k]}</span>` : ''}</div>`).join('')}</div></nav>`;
 }
 
 /* ---------------- Slate ---------------- */
@@ -149,7 +157,7 @@ function renderSlate(games, standings) {
   return `<section class="view" id="view-slate">
     <div class="daystrip">${chips}</div>
     <div class="dayhead">
-      <div><h2>${esc(fmtLong(ui.date))}</h2><div class="sub">${dayGames.length ? `${dayGames.filter(countsForChallenge).length} Challenge game${dayGames.filter(countsForChallenge).length === 1 ? '' : 's'}${day.cupGames ? ` + ${day.cupGames} NBA Cup` : ''} · first tip ${esc(fmtTime(first.tipoff))}` : 'No games'}</div></div>
+      <div><h2>${esc(fmtLong(ui.date))}</h2><div class="sub">${dayGames.length ? `${dayGames.length} game${dayGames.length === 1 ? '' : 's'}${day.cupGames ? (day.cupGames === dayGames.length ? ' · NBA Cup night' : ` · ${day.cupGames} NBA Cup`) : ''} · first tip ${esc(fmtTime(first.tipoff))}` : 'No games'}</div></div>
       ${anyFinal ? `<div class="dayscore num" title="Points this day"><span class="u">${day.UP.total}</span><span class="vs">${esc(name('UP'))} · ${esc(name('KP'))}</span><span class="k">${day.KP.total}</span></div>` : ''}
     </div>
     ${notices}
@@ -160,7 +168,7 @@ function notice(kind, ico, html) { return `<div class="notice ${kind}"><span cla
 function pickProgress(player, games) {
   let total = 0, done = 0;
   for (const g of games) {
-    if (!countsForChallenge(g)) continue;
+    if (g.status === 'postponed' || bracketOnly(g)) continue;
     const mine = store.pickFor(g.id, player) || {}; const opp = store.pickFor(g.id, otherPlayer(player)) || {};
     total++; if (mine.winner) done++;
     if (g.selector === player) { total++; if (mine.line != null) done++; }
@@ -172,7 +180,7 @@ function pickProgress(player, games) {
 function renderCard(g, now, readOnly = false) {
   const me = store.me, opp = otherPlayer(me);
   const locked = isLocked(g, now), final = g.status === 'final';
-  if (g.cup) return renderCupCard(g, now);
+  if (bracketOnly(g)) return renderCupFinalCard(g, now);
   const editable = !readOnly && store.canEdit(g);
   const picks = store.picksFor(g.id);
   const mine = picks[me] || {}, theirs = picks[opp] || {};
@@ -230,23 +238,125 @@ function renderCard(g, now, readOnly = false) {
     : `<div class="card-foot"><span class="opp-status"><span class="dot ${oppHasWinner ? 'on' : ''}"></span>${esc(name(opp))}: ${oppHasWinner ? (locked ? `picked ${esc(theirs.winner || '')}` : 'picked (hidden until tip-off)') : 'no pick yet'}</span>${sel === opp ? `<span class="opp-status"><span class="dot ${line != null ? 'on' : ''}"></span>line ${line != null ? 'posted' : 'pending'}</span>` : `<span class="opp-status"><span class="dot ${call ? 'on' : ''}"></span>${call ? 'called ' + (call === 'O' ? 'over' : 'under') : 'no call yet'}</span>`}</div>`;
 
   return `<article class="card ${locked ? 'locked' : ''} ${final ? 'final' : ''}" id="g-${esc(g.id)}">
-    <div class="card-head"><span class="time">${esc(fmtTime(g.tipoff))}</span><span class="arena">${esc(g.arena || '')}</span><span class="spacer"></span>${g.cup ? '<span class="pill cup">NBA Cup</span>' : ''}${statusPill}</div>
+    <div class="card-head"><span class="time">${esc(fmtTime(g.tipoff))}</span><span class="arena">${esc(g.arena || '')}</span><span class="spacer"></span>${g.cup ? `<span class="pill cup">${g.cupStage === 'QF' ? 'Cup quarterfinal' : g.cupStage === 'SF' ? 'Cup semifinal' : 'NBA Cup'}</span>` : ''}${statusPill}</div>
     <div class="matchup">${team(g.away, g.awayScore)}<div class="at">${final ? `<span class="margin">margin<b class="num">${margin}</b></span>` : '@'}</div>${team(g.home, g.homeScore)}</div>
     <div class="duel ${final ? 'result' : ''}">${duel}</div>
     ${foot}
   </article>`;
 }
 
-function renderCupCard(g, now) {
+/** The Cup final is not a regular-season game: it shows on the slate but is decided in the Cup bracket. */
+function renderCupFinalCard(g, now) {
   const final = g.status === 'final', winner = gameWinner(g), margin = gameMargin(g);
   const team = (code, scoreVal) => { const t = TEAMS[code]; return `<div class="team ${final ? (winner === code ? 'won' : 'lost') : ''}" style="cursor:default">
       <img class="logo" src="${teamLogo(code)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'${code}',style:'background:${t.color}'}))">
-      <span class="abbr">${code}</span><span class="nm">${esc(t.name)}</span>${final ? `<span class="score num">${scoreVal ?? ''}</span>` : ''}</div>`; };
+      <span class="abbr">${code}</span><span class="nm">${esc(t.name)}</span>${final || g.status === 'live' ? `<span class="score num">${scoreVal ?? ''}</span>` : ''}</div>`; };
   return `<article class="card cup ${final ? 'final' : ''}" id="g-${esc(g.id)}" style="border-color:color-mix(in oklab, var(--court) 45%, var(--line))">
-    <div class="card-head"><span class="time">${esc(fmtTime(g.tipoff))}</span><span class="arena">${esc(g.arena || '')}</span><span class="spacer"></span><span class="pill cup">NBA Cup</span>${final ? '<span class="pill">Final</span>' : g.status === 'postponed' ? '<span class="pill">Postponed</span>' : ''}</div>
+    <div class="card-head"><span class="time">${esc(fmtTime(g.tipoff))}</span><span class="arena">${esc(g.arena || '')}</span><span class="spacer"></span><span class="pill cup">Cup Final</span>${final ? '<span class="pill">Final</span>' : g.status === 'live' ? '<span class="pill live">Live</span>' : g.status === 'postponed' ? '<span class="pill">Postponed</span>' : ''}</div>
     <div class="matchup">${team(g.away, g.awayScore)}<div class="at">${final ? `<span class="margin">margin<b class="num">${margin}</b></span>` : '@'}</div>${team(g.home, g.homeScore)}</div>
-    <div class="card-foot"><span>🏆 NBA Cup game. Not scored in the Challenge; the Cup bracket is a separate game coming later.</span></div>
+    <div class="card-foot"><span>🏆 Decided in the Cup bracket, not scored in the Challenge.</span><span class="spacer"></span><button class="btn small ghost" data-view="cup">Open bracket</button></div>
   </article>`;
+}
+
+
+/* ---------------- NBA Cup ---------------- */
+const STAGE_LABEL = { QF: 'Quarterfinal', SF: 'Semifinal', F: 'Final' };
+function renderCup(games) {
+  const now = store.now(), me = store.me, opp = otherPlayer(me);
+  const cupGames = games.filter(g => g.cup);
+  if (!cupGames.length) return `<section class="view" id="view-cup"><div class="empty"><div class="big">🏆</div><b>No NBA Cup games on the schedule yet</b><div>Group play and the knockout bracket show up here once the schedule lists Cup games.</div></div></section>`;
+  const groups = cupGroups(games), field = cupField(groups), bracket = buildBracket(games);
+  const open = bracketOpen(bracket, now), locked = bracketLocked(bracket, now);
+  const groupGames = groups.flatMap(g => g.games), played = groupGames.filter(g => g.status === 'final').length;
+  const picks = { UP: store.cupPicksFor('UP'), KP: store.cupPicksFor('KP') };
+  const info = { UP: store.cupPickInfo('UP'), KP: store.cupPickInfo('KP') };
+  const sc = { UP: scoreBracket(picks.UP, bracket), KP: scoreBracket(picks.KP, bracket) };
+  const lead = sc.UP.total > sc.KP.total ? 'UP' : sc.KP.total > sc.UP.total ? 'KP' : null;
+
+  let status;
+  if (bracket.champion) status = `🏆 ${esc(teamName(bracket.champion, 'full'))} won the Cup`;
+  else if (bracket.f.game) status = 'The final';
+  else if (bracket.sf.some(s => s.game)) status = 'Semifinals';
+  else if (bracket.ready) status = locked ? 'Quarterfinals · bracket locked' : `Bracket open · locks ${esc(fmtWhen(bracket.lockAt))}`;
+  else if (field.complete) status = 'Group play done · waiting for the quarterfinal matchups';
+  else if (played) status = `Group play · ${played} of ${groupGames.length} games played`;
+  else status = `Group play starts ${esc(fmtLong(cupGames.map(g => g.date).sort()[0]))}`;
+
+  let bracketHtml = '';
+  if (bracket.ready) {
+    const missing = bracketMissing(picks[me], bracket);
+    let note = '';
+    if (open) note = missing
+      ? notice('todo', '✍️', `<strong>${missing} bracket pick${missing > 1 ? 's' : ''} left.</strong> Locks in ${esc(countdown(bracket.lockAt))}, at the first quarterfinal tip-off. ${info[opp].hidden ? `${esc(name(opp))} has ${info[opp].count} of ${bracket.slots.length} in (hidden until lock).` : ''}`)
+      : notice('good', '✅', `<strong>Your bracket is in.</strong> You can change it until it locks in ${esc(countdown(bracket.lockAt))}. ${info[opp].hidden ? `${esc(name(opp))} has ${info[opp].count} of ${bracket.slots.length} in (hidden until lock).` : ''}`);
+    else if (bracket.champion) note = notice('good', '🏆', lead ? `<strong>${esc(name(lead))} takes the bracket</strong> ${sc[lead].total}–${sc[otherPlayer(lead)].total}.` : `<strong>Bracket tied</strong> ${sc.UP.total}–${sc.KP.total}.`);
+    const tile = (p) => `<div class="tile ${p.toLowerCase()}">${bracket.champion && lead === p ? '<span class="crown">Bracket champ</span>' : ''}<span class="name"><span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--${p.toLowerCase()})"></span>${esc(name(p))}</span><span class="big num">${sc[p].total}</span><span class="sub">${info[p].hidden ? `${info[p].count} of ${bracket.slots.length} picks in · hidden` : `${Object.keys(picks[p]).length} of ${bracket.slots.length} picks${Object.keys(sc[p].hits).length ? ` · ${Object.values(sc[p].hits).filter(Boolean).length}/${Object.keys(sc[p].hits).length} right` : ''}`}</span></div>`;
+    const conf = c => bracket.qf.filter(q => q.conf === c);
+    bracketHtml = `<div class="section" id="cup-bracket"><h3>Bracket <span class="eyebrow">+${CUP_RULES.qf} QF · +${CUP_RULES.sf} SF · +${CUP_RULES.f} final</span></h3>
+      ${note}
+      <div class="tiles">${tile('UP')}${tile('KP')}</div>
+      <div class="bracket">
+        <div class="round"><h4>Quarterfinals <small>+${CUP_RULES.qf}</small></h4>${[...conf('East'), ...conf('West')].map(s => bracketMatch(s, bracket, picks, info, sc, open, now)).join('')}</div>
+        <div class="round"><h4>Semifinals <small>+${CUP_RULES.sf}</small></h4>${bracket.sf.map(s => bracketMatch(s, bracket, picks, info, sc, open, now)).join('')}</div>
+        <div class="round"><h4>Final <small>+${CUP_RULES.f}</small></h4>${bracketMatch(bracket.f, bracket, picks, info, sc, open, now)}</div>
+      </div>
+      <div class="faint" style="font-size:12px">Pick every round before the first quarterfinal tips off; a semifinal pick has to be one of your own quarterfinal winners, the champion one of your finalists. Bracket points are a side game and don't count toward the season score. Your brother's bracket stays hidden until the lock.</div>
+    </div>`;
+  } else {
+    bracketHtml = `<div class="section"><h3>Bracket <span class="eyebrow">+${CUP_RULES.qf} QF · +${CUP_RULES.sf} SF · +${CUP_RULES.f} final</span></h3>
+      <div class="muted">${field.complete ? 'Group play is done. The bracket opens as soon as the four quarterfinal matchups reach the schedule (the daily 5 AM check picks them up).' : 'Opens once group play is decided and the quarterfinal matchups are on the schedule, usually the first week of December. Both of you then fill in the whole bracket before the first quarterfinal tips off.'}</div>
+      ${field.complete || played ? `<div class="row" style="gap:16px">${CONFERENCES.map(c => `<div><div class="eyebrow">${c} ${field.complete ? 'field' : 'if it ended today'}</div><div>${field[c].seeds.map((t, i) => `<span class="chip ${i === 3 ? 'zero' : ''}" style="background:var(--surface-2);color:var(--fg)">${i + 1}. ${esc(t)}${i === 3 ? ' <small>WC</small>' : ''}</span>`).join(' ')}</div></div>`).join('')}</div>` : ''}
+    </div>`;
+  }
+
+  const groupTable = (gr) => {
+    const rows = groupStandings(gr), f = field[gr.conf];
+    return `<table class="group"><caption>${esc(gr.label)}</caption><thead><tr><th>Team</th><th>W-L</th><th>+/-</th></tr></thead><tbody>
+      ${rows.map((r, i) => `<tr class="${i === 0 ? 'lead' : f.wildcard === r.team ? 'wild' : ''}"><td><span class="t"><img class="logo" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'${r.team}',style:'background:${TEAMS[r.team].color}'}))"><b>${r.team}</b><span class="nm">${esc(teamName(r.team))}</span>${f.wildcard === r.team ? '<span class="pill cup">WC</span>' : ''}</span></td><td class="num">${r.w}-${r.l}</td><td class="num ${r.diff > 0 ? 'pos' : r.diff < 0 ? 'neg' : ''}">${r.diff > 0 ? '+' : ''}${r.diff}</td></tr>`).join('')}
+    </tbody></table>`;
+  };
+  const groupsHtml = groups.length ? `<div class="section"><h3>Group play <span class="eyebrow">${field.complete ? 'final standings' : 'standings'}</span></h3>
+    <div class="groups">${groups.map(groupTable).join('')}</div>
+    <div class="faint" style="font-size:12px">Each group winner plus the best second-place team in each conference (WC) go through. Sorted by record, then point differential, then points scored; the NBA breaks ties head-to-head first, so a tie here can land differently.</div>
+  </div>` : '';
+
+  return `<section class="view" id="view-cup">
+    <div class="dayhead"><div><h2>NBA Cup</h2><div class="sub">${status}</div></div>${bracket.ready ? `<div class="dayscore num" title="Bracket points"><span class="u">${sc.UP.total}</span><span class="vs">bracket</span><span class="k">${sc.KP.total}</span></div>` : ''}</div>
+    ${bracketHtml}
+    ${groupsHtml}
+  </section>`;
+}
+function bracketMatch(slot, bracket, picks, info, sc, open, now) {
+  const me = store.me, opp = otherPlayer(me);
+  const g = slot.game, final = g?.status === 'final';
+  const seats = slot.teams || slotOptions(slot, picks[me]);
+  const feederLabel = (k) => { const f = bracket.slots.find(s => s.key === k); return f.stage === 'QF' ? `${f.teams[0]} / ${f.teams[1]} winner` : `${f.conf} finalist`; };
+  const tag = (p, code) => {
+    if (picks[p][slot.key] !== code) return '';
+    const hit = sc[p].hits[slot.key];
+    return `<i class="${p.toLowerCase()[0]} ${hit === false ? 'miss' : ''}" title="${esc(name(p))}">${initial(p)}${hit === true ? '✓' : hit === false ? '✗' : ''}</i>`;
+  };
+  const seat = (code, i) => {
+    if (!code) return `<div class="bk-team empty"><span class="nm">${esc(feederLabel(slot.feeders[i]))}</span></div>`;
+    const t = TEAMS[code]; const mine = picks[me][slot.key] === code;
+    const cls = ['bk-team', mine ? 'mine' : '', final ? (slot.winner === code ? 'won' : 'lost') : ''].join(' ');
+    const scoreVal = g ? (code === g.home ? g.homeScore : g.awayScore) : null;
+    return `<button class="${cls}" data-slot="${esc(slot.key)}" data-team="${code}" ${open ? '' : 'disabled'} aria-pressed="${mine}" aria-label="Pick ${esc(teamName(code, 'full'))}">
+      <img class="logo" src="${teamLogo(code)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'logo-fallback',textContent:'${code}',style:'background:${t.color}'}))">
+      <span class="abbr">${code}</span><span class="nm">${esc(t.name)}</span><span class="tag">${tag('UP', code)}${tag('KP', code)}</span>${final || g?.status === 'live' ? `<span class="score num">${scoreVal ?? ''}</span>` : ''}</button>`;
+  };
+  const out = [];   // picks that are not in the real matchup any more (knocked out earlier)
+  if (slot.teams) for (const p of PLAYER_CODES) { const t = picks[p][slot.key]; if (t && !slot.teams.includes(t)) out.push(`${esc(name(p))} had <b>${t}</b>`); }
+  const pill = final ? '<span class="pill">Final</span>' : g?.status === 'live' ? `<span class="pill live">Live${g.clock ? ' · ' + esc(g.clock) : ''}</span>` : g && new Date(g.tipoff) <= now ? '<span class="pill">Locked</span>' : '';
+  return `<div class="bk-match ${final ? 'final' : ''}"><div class="bk-head"><span>${slot.stage === 'F' ? 'Championship' : `${slot.conf} ${STAGE_LABEL[slot.stage].toLowerCase()}`}</span><span class="spacer"></span><span>${g ? `${esc(fmtShort(g.date))} · ${esc(fmtTime(g.tipoff))}` : 'date tbd'}</span>${pill}</div>
+    ${seats.map(seat).join('')}${out.length ? `<div class="bk-note">${out.join(' · ')}</div>` : ''}</div>`;
+}
+function bindCup() {
+  $$('.bk-team[data-slot]').forEach(b => b.onclick = () => guard(async () => {
+    const mine = { ...store.cupPicksFor(store.me) };
+    if (mine[b.dataset.slot] === b.dataset.team) delete mine[b.dataset.slot]; else mine[b.dataset.slot] = b.dataset.team;
+    await store.setBracketPicks(mine);
+  }));
 }
 
 /* ---------------- Standings ---------------- */
@@ -287,7 +397,7 @@ function rulesList() {
     <li><span class="pt">+${r.winnerPoint}</span><span>Pick the winner.</span></li>
     <li><span class="pt">+${r.spreadPoint}</span><span>Win the margin duel. The selector posts a line (the margin of victory). The other player calls Over or Under. Right call: the caller takes the point. Wrong call: the selector takes it. ${r.push === 'selector' ? 'An exact push counts as a miss, so the selector takes it.' : 'An exact push gives nobody the point.'}</span></li>
     <li><span class="pt">+${r.showUpBonus}</span><span>Show-up bonus: if you make picks on a day and your brother makes none, you get +${r.showUpBonus}.</span></li>
-    <li><span class="pt">🏆</span><span>NBA Cup games are shown on the slate but sit outside the Challenge: no picks, no points. A separate Cup bracket game is coming.</span></li>
+    <li><span class="pt">🏆</span><span>NBA Cup group and knockout games count like any other game. The Cup final is not a regular-season game: it is decided in the Cup bracket (Cup tab), a side game with its own points (+${CUP_RULES.qf} per quarterfinal, +${CUP_RULES.sf} per semifinal, +${CUP_RULES.f} for the champion).</span></li>
     <li><span class="pt">⏱</span><span>Picks lock at tip-off, game by game. You can pick up to ${r.pickWindowDays} days ahead. A line freezes once it has been answered.</span></li>
     <li><span class="pt">⚠️</span><span>${r.noLine === 'responder' ? 'Selector never posts a line: the other player takes the duel point (if they made a pick on that game).' : 'Selector never posts a line: nobody gets the duel point.'} ${r.unansweredLine === 'selector' ? 'Line posted but never answered: the selector takes the point.' : 'Line posted but never answered: nobody gets the point.'}</span></li>
   </ul>`;
@@ -374,7 +484,7 @@ function renderHistory(st) {
     const cls = d.dayWinner === 'UP' ? 'win-up' : d.dayWinner === 'KP' ? 'win-kp' : 'tie';
     const open = ui.expanded === d.date;
     return `<button class="dayrow ${cls}" data-expand="${d.date}" aria-expanded="${open}">
-      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} game${d.games.length === 1 ? '' : 's'}${d.cupGames ? ` (+${d.cupGames} Cup)` : ''}${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · scores arrive at 5 AM MT'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
+      <span><span class="d">${esc(fmtLong(d.date))}</span><br><span class="m">${d.games.length} game${d.games.length === 1 ? '' : 's'}${d.cupGames ? ' · NBA Cup' : ''}${d.settled ? (d.dayWinner === 'tie' ? ' · tied' : ` · ${esc(name(d.dayWinner))} took the day`) : ' · scores arrive at 5 AM MT'}${d.UP.bonus || d.KP.bonus ? ` · <span class="bonus">+${store.rules.showUpBonus} show-up bonus to ${esc(name(d.UP.bonus ? 'UP' : 'KP'))}</span>` : ''}</span></span>
       <span class="s num"><span class="u">${d.UP.total}</span><span class="d2">–</span><span class="k">${d.KP.total}</span></span>
     </button>${open ? `<div class="games" style="margin:4px 0 10px">${d.games.map(x => renderCard(x.game, store.now(), true)).join('')}</div>` : ''}`;
   }).join('')}</div></section>`;
@@ -414,7 +524,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Advance the demo clock one day</b><span>Past games get simulated finals and random picks for both players.</span></div><button class="btn small" data-act="advance">Advance ⏩</button></div>
       <div class="switch"><div class="lbl"><b>Reset the demo</b><span>Clears all demo picks and results from this browser.</span></div><button class="btn small danger" data-act="reset">Reset</button></div>
     </div>` : ''}
-    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet'} · <button class="btn small ghost" data-act="loadschedule">Refresh from this device</button><span id="loadsched-status" class="faint"></span></dd>${store.lastSyncError ? `<dt>Last sync error</dt><dd style="color:var(--bad)">${esc(store.lastSyncError)}<br><span class="faint">${esc(new Date(store.lastSyncErrorAt).toLocaleString())}</span></dd>` : ''}` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>NBA Cup bracket · Playoff bracket</dd></dl></div>
+    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet'} · <button class="btn small ghost" data-act="loadschedule">Refresh from this device</button><span id="loadsched-status" class="faint"></span></dd>${store.lastSyncError ? `<dt>Last sync error</dt><dd style="color:var(--bad)">${esc(store.lastSyncError)}<br><span class="faint">${esc(new Date(store.lastSyncErrorAt).toLocaleString())}</span></dd>` : ''}` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>Playoff bracket</dd></dl></div>
   </section>`;
 }
 
@@ -466,6 +576,7 @@ function bindGlobal() {
   $$('[data-act="switch"]').forEach(b => b.onclick = () => store.switchPlayer(otherPlayer(store.me)));
   $$('[data-act="advance"]').forEach(b => b.onclick = () => { store.advanceDay(); toast(`Demo clock: now ${fmtLong(etDate(store.now()))}`); });
   $$('[data-act="signout"]').forEach(b => b.onclick = () => store.signOut());
+  $$('[data-expand]').forEach(b => b.onclick = () => { ui.expanded = ui.expanded === b.dataset.expand ? null : b.dataset.expand; render(); });   // History day rows
   $$('[data-act="loadschedule"]').forEach(b => b.onclick = async () => {
     b.disabled = true; const st = $('#loadsched-status');
     const say = (msg, bad = false) => { if (st) { st.textContent = msg; st.style.color = bad ? 'var(--bad)' : ''; } };
@@ -498,7 +609,6 @@ function bindSlate() {
     const cur = store.pickFor(b.dataset.game, store.me)?.ou;
     await store.setCall(b.dataset.game, cur === b.dataset.ou ? null : b.dataset.ou);
   }));
-  $$('[data-expand]').forEach(b => b.onclick = () => { ui.expanded = ui.expanded === b.dataset.expand ? null : b.dataset.expand; render(); });
 }
 function lastLine() { try { const v = Number(localStorage.getItem('nbac.lastLine')); if (v) return v; } catch {} return 8; }
 function bindSettings() {

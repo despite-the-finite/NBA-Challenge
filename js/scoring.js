@@ -36,9 +36,13 @@ export function otherPlayer(code) {
   return code === 'UP' ? 'KP' : 'UP';
 }
 
-/** NBA Cup games are shown on the slate but sit outside the Challenge: no picks, no points, no selector turn. */
+/** Games the Challenge scores. NBA Cup group and knockout games count like any other regular-season game.
+ *  Out: postponed games (they return under a new date) and the Cup final, which is not a regular-season game
+ *  and belongs to the Cup bracket side game only. */
 export function countsForChallenge(game) {
-  return !game.cup && game.status !== 'postponed';
+  if (game.status === 'postponed') return false;
+  if (game.cup && game.cupStage === 'F') return false;
+  return true;
 }
 
 export function isLocked(game, now = new Date()) {
@@ -55,7 +59,8 @@ export function isPickable(game, rules = DEFAULT_RULES, now = new Date()) {
 /** Deterministic selector for a game: alternate within the day, and alternate the
  *  day's starting player by the day's parity, so both players select ~equally. */
 export function assignSelector(game, dayGames, seasonStartDate) {
-  const sorted = [...dayGames].filter(g => !g.cup || g.id === game.id).sort(compareGames);
+  const sorted = [...dayGames].filter(countsForChallenge).sort(compareGames);
+  if (!sorted.some(g => g.id === game.id)) sorted.push(game);
   const idx = Math.max(0, sorted.findIndex(g => g.id === game.id));
   const dayIndex = daysBetween(seasonStartDate, game.date);
   return (idx + dayIndex) % 2 === 0 ? 'UP' : 'KP';

@@ -4,6 +4,7 @@
 //   LiveStore - talks to the Vercel API (/api/*) backed by Neon Postgres. Both players share one
 //               database; the API enforces the rules; a light poll keeps both phones in sync.
 import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, assignSelector, groupByDate, isLocked, isPickable, isValidLine, gameWinner } from './scoring.js';
+import { CONFERENCES, cupGroups, cupField, buildBracket, bracketOpen, bracketLocked, cleanBracketPicks } from './cup.js';
 
 const LS_KEY = 'nbac.demo.v2';
 
@@ -12,6 +13,7 @@ class BaseStore {
     this.config = config;
     this.games = new Map();
     this.picks = new Map();      // gameId -> { UP: {winner,line,ou}, KP: {...} }
+    this.cupPicks = new Map();   // player -> { picks: {slot: team}, count, hidden }   (NBA Cup bracket)
     this.rules = { ...DEFAULT_RULES };
     this.players = JSON.parse(JSON.stringify(config.PLAYERS));
     this.me = null;
@@ -27,6 +29,17 @@ class BaseStore {
   /** The responder has answered: the line is frozen. */
   lineFrozen(game) { return this.pickFor(game.id, otherPlayer(game.selector))?.ou != null; }
   oppHasWinner(gameId, player) { return !!this.pickFor(gameId, player)?.winner || !!this.pickFor(gameId, player)?.hasWinner; }
+  /** A player's bracket picks ({} when none, or when the other player's are still hidden). */
+  cupPicksFor(player) { return this.cupPicks.get(player)?.picks || {}; }
+  cupPickInfo(player) { return this.cupPicks.get(player) || { picks: {}, count: 0, hidden: false }; }
+  bracket() { return buildBracket(this.gameList()); }
+  async setBracketPicks(picks) {
+    const bracket = this.bracket();
+    if (!this.me) throw new Error('Sign in first.');
+    if (!bracket.ready) throw new Error('The bracket opens once the quarterfinal matchups are set.');
+    if (!bracketOpen(bracket, this.now())) throw new Error('The bracket locked at the first quarterfinal tip-off.');
+    await this.persistCupPicks(cleanBracketPicks(picks, bracket));
+  }
 
   // ---- mutations (validated here for instant feedback; the API validates again) ----
   async setWinner(gameId, team) {
@@ -66,7 +79,7 @@ export class DemoStore extends BaseStore {
     super(config);
     this.mode = 'demo';
     this.reason = reason;
-    this.state = { picks: {}, results: {}, me: 'UP', clockOffsetMs: null, rules: {}, players: {} };
+    this.state = { picks: {}, results: {}, me: 'UP', clockOffsetMs: null, rules: {}, players: {}, cupPicks: {}, extraGames: [] };
   }
   async init() {
     try { const raw = localStorage.getItem(LS_KEY); if (raw) this.state = { ...this.state, ...JSON.parse(raw) }; } catch {}
@@ -76,9 +89,10 @@ export class DemoStore extends BaseStore {
     if (!data) data = await (await fetch('data/sample-schedule.json')).json();
     this.scheduleNote = data.note || '';
     const seasonStart = data.games[0].date;
-    for (const [, dayGames] of groupByDate(data.games)) {
+    for (const [, dayGames] of groupByDate([...data.games, ...(this.state.extraGames || [])])) {
       for (const g of dayGames) this.games.set(g.id, { ...g, selector: assignSelector(g, dayGames, seasonStart), status: 'scheduled', homeScore: null, awayScore: null });
     }
+    this.seasonStart = seasonStart;
     if (this.state.clockOffsetMs == null) {
       // First visit: pretend it is a busy mid-season day with a month of history behind us.
       const target = new Date('2026-11-27T12:00:00-05:00');
@@ -91,6 +105,11 @@ export class DemoStore extends BaseStore {
     this.me = this.state.me || 'UP';
     for (const [id, r] of Object.entries(this.state.results)) { const g = this.games.get(id); if (g) Object.assign(g, r); }
     for (const [id, p] of Object.entries(this.state.picks)) this.picks.set(id, p);
+    this.loadCupPicks();
+  }
+  loadCupPicks() {
+    this.cupPicks.clear();
+    for (const p of PLAYER_CODES) { const picks = this.state.cupPicks?.[p] || {}; this.cupPicks.set(p, { picks, count: Object.keys(picks).length, hidden: false }); }
   }
   now() { return new Date(Date.now() + (this.state.clockOffsetMs || 0)); }
   save() { try { localStorage.setItem(LS_KEY, JSON.stringify(this.state)); } catch {} }
@@ -100,14 +119,31 @@ export class DemoStore extends BaseStore {
     if (all) this.state.picks[gameId] = all; else delete this.state.picks[gameId];
     this.save(); this.emit();
   }
+  async persistCupPicks(picks) {
+    this.state.cupPicks = { ...(this.state.cupPicks || {}), [this.me]: picks };
+    this.loadCupPicks(); this.save(); this.emit();
+  }
+  /** Same rule as the API: the other player's bracket stays hidden until it locks. */
+  cupPickInfo(player) {
+    const base = super.cupPickInfo(player);
+    if (player !== this.me && base.count && !bracketLocked(this.bracket(), this.now())) return { picks: {}, count: base.count, hidden: true };
+    return base;
+  }
+  cupPicksFor(player) { return this.cupPickInfo(player).picks; }
   switchPlayer(code) { this.me = code; this.state.me = code; this.save(); this.emit(); }
   async setRules(patch) { this.rules = { ...this.rules, ...patch }; this.state.rules = { ...(this.state.rules || {}), ...patch }; this.save(); this.emit(); }
   async setPlayerNames(names) { for (const p of PLAYER_CODES) if (names[p]) { this.players[p].name = names[p]; this.state.players = { ...(this.state.players || {}), [p]: { name: names[p] } }; } this.save(); this.emit(); }
   myPrefs() { return {}; }
   advanceDay() { this.state.clockOffsetMs += 24 * 3600 * 1000; this.save(); this.simulatePast(); }
   resetDemo() { try { localStorage.removeItem(LS_KEY); } catch {} location.reload(); }
-  /** Give both players plausible picks on games that have tipped, then random finals. Deterministic per game id. */
+  /** Give both players plausible picks on games that have tipped, then random finals. Deterministic per game id.
+   *  Once the Cup groups are decided the knockout games are invented too (the sample schedule has none). */
   simulatePast() {
+    for (let pass = 0; pass < 4; pass++) { this.simulateGames(); if (!this.ensureDemoKnockout()) break; }
+    this.simulateBrackets();
+    this.save(); this.emit();
+  }
+  simulateGames() {
     const now = this.now();
     const rnd = seeded;
     for (const [date, dayGames] of groupByDate(this.gameList())) {
@@ -132,7 +168,49 @@ export class DemoStore extends BaseStore {
         this.finishGame(g, rnd);
       }
     }
-    this.save(); this.emit();
+  }
+  /** Quarterfinals once group play is done, semifinals once the quarterfinals are final, then the final. */
+  ensureDemoKnockout() {
+    const games = this.gameList();
+    const groups = cupGroups(games);
+    if (groups.length !== 6) return false;
+    const field = cupField(groups);
+    if (!field.complete) return false;
+    const bracket = buildBracket(games);
+    const lastGroupDate = groups.flatMap(gr => gr.games.map(g => g.date)).sort().pop();
+    const shift = (n) => { const d = new Date(lastGroupDate + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const add = (date, timeET, away, home, cupStage, arena) => {
+      const g = { id: `demo:${date.replace(/-/g, '')}-${away}-${home}`, date, tipoff: `${date}T${timeET}:00-05:00`, away, home, arena, cup: true, cupStage };
+      this.state.extraGames.push(g);
+      const dayGames = [...(groupByDate(this.gameList()).get(date) || []), g];
+      this.games.set(g.id, { ...g, selector: assignSelector(g, dayGames, this.seasonStart), status: 'scheduled', homeScore: null, awayScore: null });
+    };
+    if (!bracket.qf.length) {
+      for (const conf of CONFERENCES) { const s = field[conf].seeds; if (s.length < 4) return false; const date = shift(conf === 'West' ? 8 : 9); const arena = `${s[0]} home court`;
+        add(date, '19:30', s[3], s[0], 'QF', arena); add(date, '22:00', s[2], s[1], 'QF', `${s[1]} home court`); }
+      return true;
+    }
+    if (bracket.ready && bracket.qf.every(q => q.winner) && !bracket.sf.some(s => s.game)) {
+      const date = shift(12);
+      for (const conf of CONFERENCES) { const w = bracket.qf.filter(q => q.conf === conf).map(q => q.winner); add(date, conf === 'East' ? '16:30' : '21:00', w[1], w[0], 'SF', 'T-Mobile Arena, Las Vegas'); }
+      return true;
+    }
+    if (bracket.sf.every(s => s.winner) && !bracket.f.game) { add(shift(15), '20:30', bracket.sf[1].winner, bracket.sf[0].winner, 'F', 'T-Mobile Arena, Las Vegas'); return true; }
+    return false;
+  }
+  /** A player who never filled in the bracket gets a random one once it locks (like the random game picks). */
+  simulateBrackets() {
+    const bracket = buildBracket(this.gameList());
+    if (!bracket.ready || !bracketLocked(bracket, this.now())) return;
+    for (const p of PLAYER_CODES) {
+      if (Object.keys(this.state.cupPicks?.[p] || {}).length) continue;
+      const raw = {};
+      for (const q of bracket.qf) raw[q.key] = q.teams[seeded(p + q.key) < 0.5 ? 0 : 1];
+      for (const s of bracket.sf) { const o = s.feeders.map(k => raw[k]); raw[s.key] = o[seeded(p + s.key) < 0.5 ? 0 : 1]; }
+      raw.F = seeded(p + 'F') < 0.5 ? raw['SF-East'] : raw['SF-West'];
+      this.state.cupPicks = { ...(this.state.cupPicks || {}), [p]: cleanBracketPicks(raw, bracket) };
+    }
+    this.loadCupPicks();
   }
   finishGame(g, rnd) {
     if (g.status === 'final') return;
@@ -189,12 +267,16 @@ export class LiveStore extends BaseStore {
   ingest(s) {
     for (const g of s.games || []) this.games.set(g.id, g);
     for (const p of s.picks || []) this.applyPick(p.game_id, p.player_code, { winner: p.winner, line: p.line, ou: p.ou, hasWinner: p.has_winner });
+    if (s.cupPicks) { this.cupPicks.clear(); for (const r of s.cupPicks) this.cupPicks.set(r.player_code, { picks: r.picks || {}, count: r.count || 0, hidden: !!r.hidden }); this.cupPicksKey = JSON.stringify(s.cupPicks); }
     this.lastSync = s.now;
   }
   async poll() {
     if (!this.me || !this.lastSync || document.hidden) return;
-    try { const s = await this.call('/state?since=' + encodeURIComponent(this.lastSync)); if (s.games.length || s.picks.length) { this.ingest(s); this.emit(); } else this.lastSync = s.now; }
-    catch (e) { console.warn('poll failed', e.message); }
+    try {
+      const s = await this.call('/state?since=' + encodeURIComponent(this.lastSync));
+      const cupChanged = s.cupPicks && JSON.stringify(s.cupPicks) !== this.cupPicksKey;
+      if (s.games.length || s.picks.length || cupChanged) { this.ingest(s); this.emit(); } else this.lastSync = s.now;
+    } catch (e) { console.warn('poll failed', e.message); }
   }
   startPolling() {
     if (this.pollTimer) return;
@@ -205,6 +287,11 @@ export class LiveStore extends BaseStore {
   async persistPick(gameId, patch) {
     const r = await this.call('/pick', { method: 'POST', body: { gameId, ...patch } });
     this.applyPick(gameId, this.me, { winner: r.pick.winner, line: r.pick.line, ou: r.pick.ou });
+    this.emit();
+  }
+  async persistCupPicks(picks) {
+    const r = await this.call('/cup', { method: 'POST', body: { picks } });
+    this.cupPicks.set(this.me, { picks: r.picks || {}, count: Object.keys(r.picks || {}).length, hidden: false });
     this.emit();
   }
   async setRules(patch) { const r = await this.call('/settings', { method: 'POST', body: { rules: patch } }); this.rules = { ...DEFAULT_RULES, ...r.rules }; this.emit(); }

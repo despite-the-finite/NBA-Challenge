@@ -44,6 +44,7 @@ create table if not exists games (
   away        text not null,
   arena       text,
   cup         boolean not null default false,
+  cup_stage   text,                              -- NBA Cup label from the feed when it has one: 'East A', 'QF', 'SF', 'F'
   selector    text not null check (selector in ('UP','KP')),
   status      text not null default 'scheduled' check (status in ('scheduled','live','final','postponed')),
   home_score  int,
@@ -53,6 +54,7 @@ create table if not exists games (
   final_at    timestamptz,
   updated_at  timestamptz not null default now()
 );
+alter table games add column if not exists cup_stage text;
 create index if not exists games_date_idx on games(date);
 create index if not exists games_updated_idx on games(updated_at);
 
@@ -68,6 +70,14 @@ create table if not exists picks (
   primary key (game_id, player_code)
 );
 create index if not exists picks_updated_idx on picks(updated_at);
+
+-- The NBA Cup bracket side game: one row per player, picks = { "<quarterfinal game id>": team, "SF-East": team,
+-- "SF-West": team, "F": team }. Validated and locked (first quarterfinal tip-off) by api/cup.js.
+create table if not exists cup_picks (
+  player_code text primary key references players(code),
+  picks       jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
 
 create table if not exists push_subscriptions (
   endpoint    text primary key,

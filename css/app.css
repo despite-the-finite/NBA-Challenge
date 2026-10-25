@@ -106,7 +106,7 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 14px 16p
   background: var(--surface); border-top: 1px solid var(--line);
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
 }
-.tabbar-inner { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.tabbar-inner { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border-radius: var(--radius-s); color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tab.active { color: var(--fg); background: var(--surface-2); }
@@ -285,6 +285,51 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 14px 16p
 .dayrow.win-up { border-left: 3px solid var(--up); } .dayrow.win-kp { border-left: 3px solid var(--kp); } .dayrow.tie { border-left: 3px solid var(--faint); }
 .dayrow .bonus { font-size: 11px; color: var(--court); font-weight: 700; }
 
+/* ---------- NBA Cup: bracket + groups ---------- */
+.bracket { display: grid; gap: 14px; }
+.round { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.round h4 { margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.round h4 small { color: var(--court); font-size: 13px; }
+.bk-match { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.bk-match.final { border-style: solid; }
+.bk-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; min-height: 20px; }
+.bk-head .spacer { flex: 1; }
+.bk-team { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--surface); border: 2px solid transparent; width: 100%; text-align: left; color: var(--fg); min-height: 44px; transition: background .12s ease, border-color .12s ease; }
+.bk-team:not([disabled]):hover { background: var(--surface-3); }
+.bk-team:not([disabled]):active { transform: scale(.985); }
+.bk-team[disabled] { cursor: default; }
+.bk-team .logo { width: 28px; height: 28px; object-fit: contain; flex: 0 0 auto; }
+.bk-team .logo-fallback { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 11px; color: #fff; }
+.bk-team .abbr { font-family: var(--font-display); font-weight: 800; font-size: 18px; min-width: 42px; line-height: 1; }
+.bk-team .nm { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-team .score { font-family: var(--font-display); font-size: 20px; font-weight: 800; line-height: 1; }
+.bk-team.mine { border-color: var(--me-color); background: var(--me-soft); }
+.bk-team.won .abbr { color: var(--fg); }
+.bk-team.lost .abbr, .bk-team.lost .score { color: var(--muted); }
+.bk-team.empty { border: 2px dashed var(--line); background: transparent; color: var(--faint); }
+.bk-team.empty .nm { color: var(--faint); font-style: italic; }
+.bk-team .tag { display: flex; gap: 3px; }
+.bk-team .tag i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: #fff; font-style: normal; }
+.bk-team .tag i.u { background: var(--up); } .bk-team .tag i.k { background: var(--kp); }
+.bk-team .tag i.miss { opacity: .45; }
+.bk-note { font-size: 12px; color: var(--muted); }
+.bk-note b { color: var(--fg); }
+.groups { display: grid; gap: 10px; }
+.group { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
+.group caption { text-align: left; font-family: var(--font-display); font-weight: 800; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; padding: 8px 10px 4px; color: var(--court); caption-side: top; background: var(--surface-2); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius-s) var(--radius-s) 0 0; }
+.group th { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); font-weight: 600; padding: 2px 10px 4px; text-align: right; }
+.group th:first-child { text-align: left; }
+.group td { padding: 5px 10px; border-top: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.group td:first-child { text-align: left; font-weight: 400; }
+.group .t { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.group .t img { width: 22px; height: 22px; object-fit: contain; }
+.group .t .logo-fallback { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 9px; color: #fff; }
+.group .t b { font-family: var(--font-display); font-size: 16px; min-width: 36px; }
+.group .t .nm { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group tr.lead td { background: color-mix(in oklab, var(--court) 12%, transparent); }
+.group tr.lead .t b { color: var(--court); }
+.group td.pos { color: var(--good); } .group td.neg { color: var(--bad); }
+
 /* ---------- Settings / forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; color: var(--muted); font-weight: 600; }
@@ -322,6 +367,8 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 14px 16p
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (min-width: 720px) {
   .brand h1 { font-size: 26px; }
+  .bracket { grid-template-columns: 1.15fr 1fr 1fr; align-items: start; }
+  .groups { grid-template-columns: 1fr 1fr; }
   .tiles { grid-template-columns: 1fr 1fr; }
   .team .logo, .team .logo-fallback { width: 52px; height: 52px; }
 }

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const rules = await loadRules();
     const now = new Date();
     if (game.status === 'postponed') return res.status(409).json({ error: 'This game was postponed.' });
-    if (game.cup) return res.status(409).json({ error: 'NBA Cup games are outside the Challenge (a separate Cup bracket is coming).' });
+    if (game.cup && game.cupStage === 'F') return res.status(409).json({ error: 'The Cup final is decided in the Cup bracket, not on the slate.' });
     if (!isPickable(game, rules, now)) return res.status(409).json({ error: new Date(game.tipoff) <= now ? 'This game is locked.' : `Picks for this game open ${rules.pickWindowDays} days before tip-off.` });
     const existing = await sql()`select * from picks where game_id = ${gameId}`;
     const mine = existing.find(p => p.player_code === me) || {};

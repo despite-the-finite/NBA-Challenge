@@ -32,12 +32,25 @@ Other mechanics:
 * Picks lock **per game at tip-off**. Scores and points arrive in one batch at **5 AM Mountain** the next morning (one feed request per game day, nothing in between).
 * A line **freezes once it has been answered**, so the selector can't move it after seeing the call.
 * Your winner pick is **hidden from your brother until tip-off** (the line and the call are always visible, they have to be).
-* **NBA Cup games are outside the Challenge.** They appear on the slate with a Cup label, take no picks and score nothing; a separate Cup bracket game is planned. They also don't use up a selector turn. Postponed games drop out and come back on their new date.
-* The **Monday check** (part of the 5 AM batch) re-reads the schedule: new games such as Cup knockout rounds, moved tip-offs, postponements and cancellations. ESPN labels Cup games in its event notes, which is how new ones get flagged.
+* **NBA Cup group and knockout games count like any other game** (they carry a Cup label on the slate). The Cup final is not a regular-season game: it shows on the slate but is decided in the **Cup bracket** (below), not scored in the Challenge. Postponed games drop out and come back on their new date.
+* The **Monday check** (part of the 5 AM batch) re-reads the schedule: moved tip-offs, postponements and cancellations. From the end of Cup group play until the Cup final it runs **daily**, so the quarterfinal and semifinal matchups land in the app as soon as the NBA schedules them. Feeds label Cup games (NBA.com's `gameSubLabel`, ESPN's event notes); groups themselves are derived from who plays whom.
+
+### The Cup bracket (side game)
+
+The **Cup** tab follows the NBA Cup. During November it shows the six groups with live standings (record, point differential, who is in a wildcard spot). Once the four quarterfinals are on the schedule the **bracket opens**: each player picks all four quarterfinals, both conference semifinals and the champion. A semifinal pick must be one of your own quarterfinal winners, the champion one of your finalists (changing an earlier pick clears what depended on it). The whole bracket **locks at the first quarterfinal tip-off**, and your brother's bracket is hidden until then.
+
+| Bracket points | For |
+|---|---|
+| +1 | each correct quarterfinal |
+| +2 | each correct semifinal |
+| +3 | the champion |
+
+Bracket points are a separate tally shown on the Cup tab (and in the Cup tile on the bracket); they do not count toward the season score. Picks are saved through `/api/cup` into the `cup_picks` table; the morning message mentions an unfinished bracket while it is open.
 
 ## What's in the app
 
 * **Slate**: a strip from yesterday through two weeks ahead with a progress bar per day, then one card per game: tap a team to pick the winner, post or adjust your line with the stepper, or call Over/Under. Cards show lock countdowns, live scores, final margins and who earned what.
+* **Cup**: NBA Cup group standings, then the knockout bracket with both players' picks, results and bracket points. The tab badge counts the bracket picks you still owe while it is open.
 * **Standings**: season score tiles, the cumulative "race" chart, and stats (days won, streaks, winner %, Over/Under %, lines defended, bonuses, perfect days, best day). A toggle shows **last season's** full numbers from the spreadsheet (UP 290, KP 267).
 * **History**: every completed day with the day score; tap to expand the games.
 * **Settings**: names, PIN, notifications (daily reminder time, pre-tip nudge, "line posted" alerts, nightly result), house rules, theme.
@@ -46,11 +59,11 @@ Other mechanics:
 
 ### Demo mode (no setup)
 
-Open the app with `?demo=1` (or from any static host without the API) and it runs entirely in that browser: a demo clock set to a mid-season day, simulated results behind it, and a player switch in the header so you can play both sides. **Advance a day** plays out the next day. If `data/schedule-2026-27.json` exists (see below) the demo uses the real schedule, otherwise a sample slate.
+Open the app with `?demo=1` (or from any static host without the API) and it runs entirely in that browser: a demo clock set to a mid-season day, simulated results behind it, and a player switch in the header so you can play both sides. **Advance a day** plays out the next day. If `data/schedule-2026-27.json` exists (see below) the demo uses the real schedule, otherwise a sample slate. The sample has the Cup group games but no knockout games, so the demo invents the quarterfinals, semifinals and final from the simulated group standings once group play is over (advance past Dec 1 to see the bracket open).
 
 ### Live mode (Vercel + Neon)
 
-Already done: the Neon project **NBA Challenge** (`quiet-flower-84539406`, database `nba`) exists with the schema from `db/schema.sql` applied. Each player creates their own PIN the first time they sign in (do that right after deploying, before sharing the URL).
+Already done: the Neon project **NBA Challenge** (`quiet-flower-84539406`, database `nba`) exists with the schema from `db/schema.sql` applied. Each player creates their own PIN the first time they sign in (do that right after deploying, before sharing the URL). Later additive schema changes (the `cup_stage` column and the `cup_picks` table) are applied by the API itself on first use (`lib/db.js` `migrate()`), so a redeploy needs no manual migration.
 
 1. **Deploy on Vercel**: vercel.com → *Add New Project* → import `despite-the-finite/NBA-Challenge` → Framework preset **Other**, no build command, output directory blank → add the environment variables below → Deploy. Every push to `main` redeploys.
 
@@ -84,6 +97,7 @@ Already done: the Neon project **NBA Challenge** (`quiet-flower-84539406`, datab
 ```
 index.html, css/app.css, js/app.js      the app (plain ES modules, no build step)
 js/scoring.js                           the scoring engine (pure functions, shared with the API)
+js/cup.js                               NBA Cup: groups from the schedule, standings, knockout bracket, bracket picks and points
 js/store.js                             demo store (localStorage) and live store (fetches /api)
 js/teams.js                             team codes, names, colors, logo URLs
 config.js                               API path and player defaults
@@ -91,6 +105,7 @@ sw.js, manifest.webmanifest, icons/     PWA install + push
 api/auth.js                             sign in with player + PIN (signed cookie), change PIN
 api/state.js                            league state, delta polling, hides opponent picks until tip-off
 api/pick.js                             save a winner / line / call with every rule enforced
+api/cup.js                              save a Cup bracket (validated, locked at the first quarterfinal tip-off)
 api/settings.js, api/push.js            rules, names, reminder prefs, push subscriptions
 api/tick.js                             cron entry: the 5 AM batch and the morning message
 lib/feeds.js                            NBA.com and ESPN feed parsers (one normalized shape)
@@ -100,11 +115,10 @@ data/season-2024-25.json                last season, from the spreadsheet
 data/sample-schedule.json               demo slate (data/schedule-2026-27.json replaces it once imported)
 tools/prep_data.py                      rebuilds the data files from the spreadsheet
 tools/import_schedule.mjs               imports a downloaded NBA.com schedule file
-tools/test_scoring.mjs, tools/test_api.mjs   npm test
+tools/test_scoring.mjs, tools/test_api.mjs, tools/test_cup.mjs   npm test
 ```
 
 ## Roadmap
 
-* NBA Cup bracket (knockout picks; group-stage games are already flagged in the slate).
 * Playoff bracket (series winners and games-in-series).
 * Weekly recap notification and a "rivalry" page (each player's best and worst teams to pick).

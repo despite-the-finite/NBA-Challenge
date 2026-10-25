@@ -1,9 +1,11 @@
 // GET /api/state            -> full league state for the signed-in player (no feed calls: scores come from the 5 AM batch)
 // GET /api/state?since=ISO  -> only games/picks changed since then (plus picks that just unlocked)
 // The other player's winner pick is hidden (winner:null, has_winner:true) until that game tips off.
-import { sql } from '../lib/db.js';
+// cupPicks (both players' NBA Cup bracket picks, the other player's hidden until the bracket locks) ride
+// along on every response: two small rows, so no delta logic.
+import { sql, migrate } from '../lib/db.js';
 import { requirePlayer } from '../lib/auth.js';
-import { rowToGame, loadRules, syncSchedule } from '../lib/league.js';
+import { rowToGame, loadRules, syncSchedule, loadCup, visibleCupPicks } from '../lib/league.js';
 import { once } from '../lib/notify.js';
 import { vapidKeys } from '../lib/notify.js';
 
@@ -15,6 +17,7 @@ export default async function handler(req, res) {
     const since = req.query.since ? new Date(req.query.since) : null;
     if (since && isNaN(since)) return res.status(400).json({ error: 'bad since' });
     const now = new Date();
+    await migrate();
     if (!since) {
       // First run after deploy: an empty games table loads the schedule once. Scores never load here.
       const [{ n }] = await sql()`select count(*)::int as n from games`;
@@ -35,7 +38,7 @@ export default async function handler(req, res) {
       const hidden = p.player_code !== me && new Date(p.tipoff) > now;
       return { game_id: p.game_id, player_code: p.player_code, winner: hidden ? null : p.winner, has_winner: p.winner != null, line: p.line == null ? null : Number(p.line), ou: p.ou };
     });
-    const out = { me, now: now.toISOString(), games: games.map(rowToGame), picks: visible };
+    const out = { me, now: now.toISOString(), games: games.map(rowToGame), picks: visible, cupPicks: visibleCupPicks(await loadCup(), me, now) };
     if (!since) {
       out.players = players.map(p => ({ code: p.code, name: p.name, color: p.color, ...(p.code === me ? { tz: p.tz, reminder_time: p.reminder_time, notify_pretip: p.notify_pretip, notify_lines: p.notify_lines, notify_results: p.notify_results } : {}) }));
       out.rules = rules;
