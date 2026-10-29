@@ -51,6 +51,7 @@ Bracket points are a separate tally shown on the Cup tab (and in the Cup tile on
 
 * **Slate**: a strip from yesterday through two weeks ahead with a progress bar per day, then one card per game: tap a team to pick the winner, post or adjust your line with the stepper, or call Over/Under. Cards show lock countdowns, live scores, final margins and who earned what.
 * **Cup**: NBA Cup group standings, then the knockout bracket with both players' picks, results and bracket points. The tab badge counts the bracket picks you still owe while it is open.
+* **Play-In** and **Playoffs**: placeholders for the postseason brackets (coming soon, under development).
 * **Standings**: season score tiles, the cumulative "race" chart, and stats (days won, streaks, winner %, Over/Under %, lines defended, bonuses, perfect days, best day). A toggle shows **last season's** full numbers from the spreadsheet (UP 290, KP 267).
 * **History**: every completed day with the day score; tap to expand the games.
 * **Settings**: names, PIN, notifications (daily reminder time, pre-tip nudge, "line posted" alerts, nightly result), house rules, theme.

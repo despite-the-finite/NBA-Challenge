@@ -1,10 +1,10 @@
-// NBA Challenge web app. Renders five views (Slate, Cup, Standings, History, Settings) from the store.
+// NBA Challenge web app. Renders the views (Slate, Cup, Play-In, Playoffs, Standings, History, Settings) from the store.
 import { createStore, DemoStore } from './store.js';
 import { TEAMS, teamLogo, teamName } from './teams.js';
 import { DEFAULT_RULES, PLAYER_CODES, otherPlayer, scoreGame, scoreDay, computeStandings, groupByDate, isLocked, isPickable, gameWinner, gameMargin, missingPicks, hasAnyPick } from './scoring.js';
 import { CUP_RULES, CONFERENCES, cupGroups, groupStandings, cupField, buildBracket, bracketOpen, bracketLocked, bracketMissing, scoreBracket, slotOptions, bracketOnly } from './cup.js';
 
-const VIEWS = ['slate', 'cup', 'standings', 'history', 'settings'];
+const VIEWS = ['slate', 'cup', 'playin', 'playoffs', 'standings', 'history', 'settings'];
 
 const CFG = window.NBA_CONFIG;
 let store = createStore(CFG);
@@ -73,7 +73,7 @@ function render() {
     <div class="app">
       ${renderTopbar(standings)}
       <main>
-        ${ui.view === 'slate' ? renderSlate(games, standings) : ui.view === 'cup' ? renderCup(games) : ui.view === 'standings' ? renderStandings(games, standings) : ui.view === 'history' ? renderHistory(standings) : renderSettings()}
+        ${ui.view === 'slate' ? renderSlate(games, standings) : ui.view === 'cup' ? renderCup(games) : ui.view === 'playin' ? renderComingSoon('playin') : ui.view === 'playoffs' ? renderComingSoon('playoffs') : ui.view === 'standings' ? renderStandings(games, standings) : ui.view === 'history' ? renderHistory(standings) : renderSettings()}
       </main>
       ${renderTabbar({ slate: todo, cup: cupTodo })}
     </div>
@@ -105,12 +105,14 @@ function renderTopbar(st) {
 const ICONS = {
   slate: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   cup: '<svg viewBox="0 0 24 24"><path d="M8 3h8v6a4 4 0 0 1-8 0V3zM8 5H5a3 3 0 0 0 3 5M16 5h3a3 3 0 0 1-3 5M12 13v4M8 21h8M9.5 17h5"/></svg>',
+  playin: '<svg viewBox="0 0 24 24"><path d="M3 5h6M3 10h6M9 7.5h4v9H9M3 14h6M3 19h6M13 12h4M17 9.5h4"/></svg>',
+  playoffs: '<svg viewBox="0 0 24 24"><path d="M4 17l1.5-9 4.5 4.5L12 6l2 6.5L18.5 8 20 17zM4 17h16v3H4z"/></svg>',
   standings: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
 };
 function renderTabbar(counts) {
-  const tabs = [['slate', 'Slate'], ['cup', 'Cup'], ['standings', 'Standings'], ['history', 'History'], ['settings', 'Settings']];
+  const tabs = [['slate', 'Slate'], ['cup', 'Cup'], ['playin', 'Play-In'], ['playoffs', 'Playoffs'], ['standings', 'Standings'], ['history', 'History'], ['settings', 'Settings']];
   return `<nav class="tabbar"><div class="tabbar-inner">${tabs.map(([k, l]) => `<div class="tab-wrap"><button class="tab ${ui.view === k ? 'active' : ''}" data-view="${k}" aria-current="${ui.view === k}">${ICONS[k]}<span>${l}</span></button>${counts[k] ? `<span class="count" title="${k === 'cup' ? 'Bracket picks left' : 'Picks left today'}">${counts[k]}</span>` : ''}</div>`).join('')}</div></nav>`;
 }
 
@@ -359,6 +361,20 @@ function bindCup() {
   }));
 }
 
+/* ---------------- Coming soon: Play-In and Playoffs ---------------- */
+const COMING_SOON = {
+  playin: { icon: '🎟️', title: 'Play-In bracket', blurb: 'Seeds 7 through 10 in each conference, the 7/8 and 9/10 games and the last-chance game. Pick who takes the 7 and 8 seeds.' },
+  playoffs: { icon: '🏆', title: 'Playoff bracket', blurb: 'The 16-team bracket: series winners and games-in-series, round by round through the Finals.' },
+};
+function renderComingSoon(key) {
+  const c = COMING_SOON[key];
+  return `<section class="view" id="view-${key}">
+    <div class="dayhead"><div><h2>${esc(c.title)}</h2><div class="sub">Coming soon · under development</div></div></div>
+    <div class="section"><div class="empty" style="padding:28px 10px"><div class="big">${c.icon}</div><b>Coming soon</b><div class="muted" style="max-width:420px">${esc(c.blurb)}</div><span class="pill soon" style="margin-top:6px">Under development</span></div></div>
+    <div class="faint" style="font-size:12px;text-align:center">The regular-season Challenge and the NBA Cup bracket are live. This tab opens when the bracket game is ready.</div>
+  </section>`;
+}
+
 /* ---------------- Standings ---------------- */
 function renderStandings(games, st) {
   if (ui.season === 'last') return renderLastSeason();
@@ -524,7 +540,7 @@ function renderSettings() {
       <div class="switch"><div class="lbl"><b>Advance the demo clock one day</b><span>Past games get simulated finals and random picks for both players.</span></div><button class="btn small" data-act="advance">Advance ⏩</button></div>
       <div class="switch"><div class="lbl"><b>Reset the demo</b><span>Clears all demo picks and results from this browser.</span></div><button class="btn small danger" data-act="reset">Reset</button></div>
     </div>` : ''}
-    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet'} · <button class="btn small ghost" data-act="loadschedule">Refresh from this device</button><span id="loadsched-status" class="faint"></span></dd>${store.lastSyncError ? `<dt>Last sync error</dt><dd style="color:var(--bad)">${esc(store.lastSyncError)}<br><span class="faint">${esc(new Date(store.lastSyncErrorAt).toLocaleString())}</span></dd>` : ''}` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>Playoff bracket</dd></dl></div>
+    <div class="section"><h3>About</h3><dl class="kv"><dt>Mode</dt><dd>${store.mode === 'demo' ? `Demo (this browser only)${store.reason ? ' · API unreachable: ' + esc(store.reason) : ''}` : 'Live (Vercel API + Neon)'}</dd>${store.mode === 'demo' && store.scheduleNote ? `<dt>Schedule</dt><dd>${esc(store.scheduleNote)}</dd>` : ''}${store.mode === 'live' ? `<dt>Scores refresh</dt><dd>Once a day at 5:00 AM Mountain${store.lastScoresSync ? ` · last ${esc(new Date(store.lastScoresSync).toLocaleString())}` : ' · not run yet'}</dd><dt>Schedule synced</dt><dd>${store.lastScheduleSync ? esc(new Date(store.lastScheduleSync).toLocaleString()) : 'not yet'} · <button class="btn small ghost" data-act="loadschedule">Refresh from this device</button><span id="loadsched-status" class="faint"></span></dd>${store.lastSyncError ? `<dt>Last sync error</dt><dd style="color:var(--bad)">${esc(store.lastSyncError)}<br><span class="faint">${esc(new Date(store.lastSyncErrorAt).toLocaleString())}</span></dd>` : ''}` : ''}<dt>Season</dt><dd>${esc(CFG.SEASON)}</dd><dt>Games loaded</dt><dd>${store.games.size}</dd><dt>Next up</dt><dd>Play-In bracket · Playoff bracket</dd></dl></div>
   </section>`;
 }
 
